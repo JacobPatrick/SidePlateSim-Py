@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SidePlateSim"
+version = "0.0.0"
+authors = [
+    { name="Pan Wenhao", email="lumivoxflow@gmail.com" }
+]
+dependencies = [
+    "black>=25.1.0",
+    "matplotlib>=3.10.3",
+    "numpy>=2.3.2",
+    "pandas>=2.3.1",
+    "scipy>=1.16.1",
+    "seaborn>=0.13.2",
+    "pyyaml>=6.0.2"
+]
+
+[tool.black]
+line-length = 80
+target-version = ['py311']
+skip-string-normalization = true
+exclude = '''
+/config/
+/data/
+.gitignore
+README.md
+'''
