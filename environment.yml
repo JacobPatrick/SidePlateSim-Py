@@ -1,0 +1,16 @@
+name: SidePlateSim
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy>=1.24
+  - scipy>=1.10
+  - matplotlib>=3.7
+  - pyyaml>=6.0
+  - shapely>=2.0
+  - meshpy>=2.0
+  - pip
+  - pip:
+      - pyvista>=0.40 # 可选：高级可视化
+      - tqdm>=4.65 # 可选：进度条

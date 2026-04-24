@@ -1,7 +1,0 @@
-black
-matplotlib
-numpy
-pandas
-scipy
-seaborn
-pyyaml
