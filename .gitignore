@@ -1,5 +1,6 @@
 .vscode/
 data/
 results/
+config/*.yml
 __pycache__
 temp.py
