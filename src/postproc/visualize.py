@@ -1,5 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib import tri as mtri
+from datetime import datetime
 
 
 def plot_shapely_poly(poly, fig_name, mode='save'):
@@ -27,7 +29,10 @@ def plot_shapely_poly(poly, fig_name, mode='save'):
     plt.tight_layout()
 
     if mode == 'save':
-        plt.savefig(f'results/figures/{fig_name}.png', dpi=300)
+        plt.savefig(
+            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            dpi=300,
+        )
     elif mode == 'show':
         plt.show()
     plt.close()
@@ -48,7 +53,29 @@ def plot_mesh(mesh, fig_name, mode='save'):
     ax.set_ylabel('Y [mm]')
     plt.tight_layout()
     if mode == 'save':
-        plt.savefig(f'results/figures/{fig_name}.png', dpi=300)
+        plt.savefig(
+            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            dpi=300,
+        )
+    elif mode == 'show':
+        plt.show()
+    plt.close()
+
+
+def plot_pressure_distribution(mesh, p_cells, fig_name, mode='save'):
+    _, ax = plt.subplots(figsize=(6, 6))
+    x_lst = [mesh.points[i][0] for i in range(len(mesh.points))]
+    y_lst = [mesh.points[i][1] for i in range(len(mesh.points))]
+    triang = mtri.Triangulation(x_lst, y_lst, triangles=mesh.elements)
+    c = ax.tripcolor(triang, facecolors=p_cells, cmap='jet', shading='flat')
+    c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
+    ax.set_aspect('equal')
+    plt.colorbar(c, ax=ax, label='Pressure [Pa]')
+    if mode == 'save':
+        plt.savefig(
+            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            dpi=300,
+        )
     elif mode == 'show':
         plt.show()
     plt.close()

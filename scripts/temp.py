@@ -3,10 +3,15 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from datetime import datetime
+import numpy as np
 from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import plot_shapely_poly, plot_mesh
+from src.postproc.visualize import (
+    plot_shapely_poly,
+    plot_mesh,
+    plot_pressure_distribution,
+)
 from src.geometry.mesher import shapely_to_meshpy
+from src.solver.reynolds_solver import ReynoldsSolver
 
 
 def main():
@@ -26,16 +31,24 @@ def main():
         pressure_angle=pressure_angle,
     )
     tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=4)
-    # plot_shapely_poly(gear_poly, fig_name=f"gear_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    # plot_shapely_poly(gear_poly, fig_name=f"gear_profile")
     # plot_shapely_poly(
     #     tooth_poly,
-    #     fig_name=f"tooth_profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+    #     fig_name=f"tooth_profile",
     # )
-    mesh = shapely_to_meshpy(tooth_poly, max_area=0.3)
-    plot_mesh(
-        mesh,
-        fig_name=f"tooth_mesh_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        mode="save",
+    mesh = shapely_to_meshpy(tooth_poly, max_area=0.01)
+    h_nodes = 1e-5 * np.ones(len(mesh.points)) - 3e-7 * np.array(
+        [p[1] for p in mesh.points]
+    )
+    bc_dict = dict(enumerate(mesh.facet_markers))
+
+    case = ReynoldsSolver(
+        mesh, h_nodes, mu=0.1, U_vec=(5.0, 0.0), ht=1e-3, bc_dict=bc_dict
+    )
+    p = case.solve()
+
+    plot_pressure_distribution(
+        mesh, p, fig_name="pressure_distribution", mode='show'
     )
 
 

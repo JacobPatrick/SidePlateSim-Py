@@ -1,0 +1,15 @@
+oil:
+  density: 850.0
+  viscosity: 0.1
+gear:
+  module: 2.0
+  num_teeth: 20
+  pressure_angle: 20.0
+  inner_radius: 7.5
+  width: 10.0
+film:
+  h_base: 1e-5
+  h_tilt: (0.0, 0.0)
+  p_0: 1e5
+  U_vec: (5.0, 0.0)
+  ht: 1e-3

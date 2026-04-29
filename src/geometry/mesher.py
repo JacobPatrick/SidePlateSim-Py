@@ -104,13 +104,10 @@ def shapely_to_meshpy(
     mesh_info.set_points(points)
     mesh_info.set_facets(facets)
 
-    # 4. 边界标记（CFD 关键）
+    # 4. 边界标记
     # 假设最后两个点构成的边是径向线，其余为齿廓/圆弧
     facet_markers = [1] * n_pts  # 默认标记 1（固壁/齿面）
-    if mark_radial and n_pts > 2:
-        # 径向边通常位于起点和终点附近，此处简化：标记首尾两段为入口/出口
-        facet_markers[0] = 2  # 径向边 1（入口/低压侧）
-        facet_markers[-1] = 3  # 径向边 2（出口/高压侧）
+    # TODO: 进一步细化边界条件
     mesh_info.set_facets(facets, facet_markers=facet_markers)
 
     # 5. 生成网格
