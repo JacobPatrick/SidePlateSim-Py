@@ -162,7 +162,28 @@ class ReynoldsSolver:
         self.equ = (A.tocsr(), b)
 
     def solve(self):
-        """求解线性系统 Ax=b，返回压力分布 p"""
+        """
+        求解线性系统 Ax=b，返回压力分布 p
+        """
 
         p = spsolve(self.equ[0], self.equ[1])
         return p
+
+    def calc_force(self, p):
+        """
+        根据压力分布求油膜压力
+        """
+        points = np.array(self.mesh.points)
+        elements = np.array(self.mesh.elements)
+
+        centroids = np.mean(points[elements], axis=1)
+        areas = np.zeros(len(elements))
+        for i, e in enumerate(elements):
+            p0, p1, p2 = points[e]
+            areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
+
+        F = np.sum(p * areas)
+        i = np.sum(p * centroids[:, 0] * areas) / F
+        j = np.sum(p * centroids[:, 1] * areas) / F
+
+        return F, (i, j)

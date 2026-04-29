@@ -83,13 +83,13 @@ def _clean_polygon_boundary(
 
 
 def shapely_to_meshpy(
-    poly: Polygon, max_area: float = 0.5, mark_radial: bool = True
+    poly: Polygon, max_area: float = 0.5
 ):
     """
     将 Shapely 多边形转换为 meshpy 网格，并自动标记径向边界
     """
     # 1. 清理边界，确保质量
-    cleaned_poly = _clean_polygon_boundary(poly, min_edge_length=0.1)
+    cleaned_poly = _clean_polygon_boundary(poly, min_edge_length=1e-5)
 
     # 2. 提取外轮廓点与分段
     coords = list(cleaned_poly.exterior.coords)

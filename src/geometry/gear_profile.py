@@ -14,9 +14,9 @@ class InvoluteGear:
     """生成渐开线齿轮"""
 
     def __init__(
-        self, module, teeth_num, inner_radius, thickness=50, pressure_angle=20
+        self, module, teeth_num, inner_radius, thickness=5e-2, pressure_angle=20
     ):
-        self.module = module
+        self.module = module * 1e-3
         self.teeth_num = teeth_num
         self.inner_radius = inner_radius
         self.thickness = thickness

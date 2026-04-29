@@ -50,7 +50,7 @@ def main():
     #     tooth_poly,
     #     fig_name=f"tooth_profile",
     # )
-    mesh = shapely_to_meshpy(tooth_poly, max_area=0.01)
+    mesh = shapely_to_meshpy(tooth_poly, max_area=1e-8)
     h_nodes = (
         h_base * np.ones(len(mesh.points))
         + h_tilt[0] * np.array([p[0] for p in mesh.points])
@@ -62,10 +62,12 @@ def main():
         mesh, h_nodes, mu=oil_mu, U_vec=U_vec, ht=ht, bc_dict=bc_dict
     )
     p = case.solve()
+    F, (i, j) = case.calc_force(p)
 
     plot_pressure_distribution(
         mesh, p, fig_name="pressure_distribution", mode='show'
     )
+    print(f"油膜压力: {F:.3f}, 作用点坐标: ({i:.5f}, {j:.5f})")
 
 
 if __name__ == '__main__':
