@@ -5,6 +5,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 from src.geometry.gear_profile import InvoluteGear
+from src.postproc.visualize import (
+    plot_shapely_poly,
+    plot_mesh,
+    plot_pressure_distribution,
+)
+from src.geometry.mesher import shapely_to_meshpy
+from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
 
 
@@ -16,6 +23,8 @@ def main():
     teeth_num = int(params.gear.num_teeth)
     inner_radius = np.float64(params.gear.inner_radius)
     pressure_angle = np.float64(params.gear.pressure_angle)
+    rotation_speed = np.float64(params.gear.rotation_speed)
+    omega = rotation_speed * 2 * np.pi / 60.0  # 转速转换为角速度 [rad/s]
 
     # 油液物性
     # oil_rho = np.float64(params.fluid.density)
@@ -25,9 +34,9 @@ def main():
     h_base = np.float64(params.film.h_base)
     h_tilt = eval(params.film.h_tilt)
     p0 = np.float64(params.film.p_0)
-    U_vec = eval(params.film.U_vec)
     ht = np.float64(params.film.ht)
 
+    # 1. 生成齿轮轮廓（单齿轮廓）
     print(
         f"生成参数: 齿数={teeth_num}, 模数={module}, 内径={inner_radius}, 压力角={pressure_angle}°"
     )
@@ -37,6 +46,43 @@ def main():
         inner_radius=inner_radius,
         pressure_angle=pressure_angle,
     )
+    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+
+    # 2. 划分网格
+    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7)
+
+    # 3. 求仿真油膜参数表
+    points = np.array(mesh.points)
+    elements = np.array(mesh.elements)
+    centroids = np.mean(points[elements], axis=1)
+    # 3.1 计算节点处的油膜厚度
+    h_nodes = (
+        h_base * np.ones(len(points))
+        + h_tilt[0] * np.array([p[0] for p in mesh.points])
+        + h_tilt[1] * np.array([p[1] for p in mesh.points])
+    )
+    # 非负检查
+    assert np.any(h_nodes > 0), "警告: 油膜厚度存在非正值，请检查参数设置！"
+
+    # 3.2 确定边界条件
+    bc_dict = dict(enumerate([p0] * len(mesh.facet_markers)))
+
+    # 3.3 计算三角网格中心处的相对运动速度
+    U_nodes = np.array([[omega * p[1], omega * p[0]] for p in centroids])
+
+    # 3.4 计算三角网格中心处的挤压速度
+    ht_nodes = np.ones(len(centroids)) * ht
+
+    case = ReynoldsSolver(
+        mesh, h_nodes, mu=oil_mu, U_vec=U_nodes, ht=ht_nodes, bc_dict=bc_dict
+    )
+    p = case.solve()
+    F, (i, j) = case.calc_force(p)
+
+    plot_pressure_distribution(
+        mesh, p, fig_name="pressure_distribution", mode='save'
+    )
+    print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 
 
 if __name__ == '__main__':

@@ -1,5 +1,3 @@
-"""Reynolds equation solver (finite volume method)"""
-
 import numpy as np
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
@@ -16,8 +14,8 @@ class ReynoldsSolver:
         mesh: MeshInfo,
         h_nodes: np.ndarray,
         mu: float,
-        U_vec: tuple = (0.0, 0.0),
-        ht: float = 0.0,
+        U_vec: np.ndarray,
+        ht: np.ndarray,
         bc_dict: dict = {},
     ):
         """
@@ -25,7 +23,7 @@ class ReynoldsSolver:
             mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
             h_nodes: 节点处的油膜厚度 (N,) [m]
             mu: 动力粘度 [Pa·s]
-            U_vec: 壁面相对速度向量 (Ux, Uy) [m/s]
+            U_vec: 壁面相对速度向量场 (Ux, Uy) [m/s]
             ht: 挤压速度场 (N,) [m/s]
             bc_dict: 边界条件字典 {facet_marker: pressure_value [Pa]}，默认空字典表示无 Dirichlet 边界
         """
@@ -49,7 +47,6 @@ class ReynoldsSolver:
         facet_markers = np.array(self.mesh.facet_markers)
 
         n_cells = len(elements)
-        Ux, Uy = self.U_vec
 
         # 1. 单元几何属性计算
         centroids = np.mean(points[elements], axis=1)  # (nC, 2)
@@ -129,7 +126,15 @@ class ReynoldsSolver:
 
                 # 对流源项
                 h_f = 0.5 * (h_cells[i] + h_cells[j])
-                conv = 0.5 * (Ux * normal[0] + Uy * normal[1]) * h_f * length
+                conv = (
+                    0.5
+                    * (
+                        self.U_vec[i, 0] * normal[0]
+                        + self.U_vec[i, 1] * normal[1]
+                    )
+                    * h_f
+                    * length
+                )
                 b[i] -= conv  # 流出 i 为负贡献
                 b[j] += conv  # 流入 j 为正贡献
 
@@ -150,14 +155,19 @@ class ReynoldsSolver:
                     h_f = h_cells[i]  # 边界采用单元中心值近似
                     conv = (
                         0.5
-                        * (Ux * h_f * normal[0] + Uy * h_f * normal[1])
+                        * (
+                            self.U_vec[i, 0] * h_f * normal[0]
+                            + self.U_vec[i, 1] * h_f * normal[1]
+                        )
                         * length
                     )
                     b[i] -= conv
 
+        print(i)
+
         # 挤压速度场 ht 源项
         for i in range(n_cells):
-            b[i] -= self.ht * areas[i]
+            b[i] -= self.ht[i] * areas[i]
 
         self.equ = (A.tocsr(), b)
 

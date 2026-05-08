@@ -14,6 +14,7 @@ class GearParameters:
     num_teeth: int
     pressure_angle: float
     inner_radius: float
+    rotation_speed: float
 
 
 @dataclass
