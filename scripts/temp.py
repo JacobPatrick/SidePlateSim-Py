@@ -74,13 +74,22 @@ def main():
 
     # 3.4 计算三角网格中心处的挤压速度
     ht_cells = (
-        np.cos(status_vec[2]) * status_vec[3] * np.array([p[1] for p in centroids])
-         - np.cos(status_vec[4]) * status_vec[5] * np.array([p[0] for p in centroids])
-         + status_vec[1] * np.ones(len(centroids))
+        np.cos(status_vec[2])
+        * status_vec[3]
+        * np.array([p[1] for p in centroids])
+        - np.cos(status_vec[4])
+        * status_vec[5]
+        * np.array([p[0] for p in centroids])
+        + status_vec[1] * np.ones(len(centroids))
     )
 
     case = ReynoldsSolver(
-        mesh, h_cells, mu=oil_mu, U_cells=U_cells, ht_cells=ht_cells, bc_dict=bc_dict
+        mesh,
+        h_cells,
+        mu=oil_mu,
+        U_cells=U_cells,
+        ht_cells=ht_cells,
+        bc_dict=bc_dict,
     )
     p = case.solve()
     F, (i, j) = case.calc_force(p)

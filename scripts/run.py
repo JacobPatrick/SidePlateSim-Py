@@ -53,7 +53,7 @@ def main():
     points = np.array(mesh.points)
     elements = np.array(mesh.elements)
     centroids = np.mean(points[elements], axis=1)
-    
+
     # 3.1 计算节点处的油膜厚度
     h_cells = (
         np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
@@ -61,7 +61,9 @@ def main():
         + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
-    assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查参数设置！"
+    assert np.any(
+        h_cells > 0
+    ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
 
     # 3.2 确定边界条件
     bc_dict = dict(enumerate([p0] * len(mesh.facet_markers)))
@@ -71,13 +73,22 @@ def main():
 
     # 3.4 计算三角网格中心处的挤压速度
     ht_cells = (
-        np.cos(status_vec[2]) * status_vec[3] * np.array([p[1] for p in centroids])
-         - np.cos(status_vec[4]) * status_vec[5] * np.array([p[0] for p in centroids])
-         + status_vec[1] * np.ones(len(centroids))
+        np.cos(status_vec[2])
+        * status_vec[3]
+        * np.array([p[1] for p in centroids])
+        - np.cos(status_vec[4])
+        * status_vec[5]
+        * np.array([p[0] for p in centroids])
+        + status_vec[1] * np.ones(len(centroids))
     )
 
     case = ReynoldsSolver(
-        mesh, h_cells, mu=oil_mu, U_cells=U_cells, ht_cells=ht_cells, bc_dict=bc_dict
+        mesh,
+        h_cells,
+        mu=oil_mu,
+        U_cells=U_cells,
+        ht_cells=ht_cells,
+        bc_dict=bc_dict,
     )
     p = case.solve()
     F, (i, j) = case.calc_force(p)

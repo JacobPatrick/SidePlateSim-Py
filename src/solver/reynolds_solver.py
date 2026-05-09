@@ -21,10 +21,10 @@ class ReynoldsSolver:
         """
         Args:
             mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
-            h_nodes: 节点处的油膜厚度 (N,) [m]
+            h_cells: 网格单元处的油膜厚度 (N,) [m]
             mu: 动力粘度 [Pa·s]
-            U_vec: 壁面相对速度向量场 (Ux, Uy) [m/s]
-            ht: 挤压速度场 (N,) [m/s]
+            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
+            ht_cells: 挤压速度场 (N,) [m/s]
             bc_dict: 边界条件字典 {facet_marker: pressure_value [Pa]}，默认空字典表示无 Dirichlet 边界
         """
         self.mesh = mesh
