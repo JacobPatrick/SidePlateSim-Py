@@ -25,16 +25,14 @@ def main():
     pressure_angle = np.float64(params.gear.pressure_angle)
     rotation_speed = np.float64(params.gear.rotation_speed)
     omega = rotation_speed * 2 * np.pi / 60.0  # 转速转换为角速度 [rad/s]
+    status_vec = eval(params.gear.status_vec)
 
     # 油液物性
     # oil_rho = np.float64(params.fluid.density)
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 油膜参数
-    h_base = np.float64(params.film.h_base)
-    h_tilt = eval(params.film.h_tilt)
     p0 = np.float64(params.film.p_0)
-    ht = np.float64(params.film.ht)
 
     # 1. 生成齿轮轮廓（单齿轮廓）
     print(
@@ -60,25 +58,29 @@ def main():
     elements = np.array(mesh.elements)
     centroids = np.mean(points[elements], axis=1)
     # 3.1 计算节点处的油膜厚度
-    h_nodes = (
-        h_base * np.ones(len(points))
-        + h_tilt[0] * np.array([p[0] for p in mesh.points])
-        + h_tilt[1] * np.array([p[1] for p in mesh.points])
+    h_cells = (
+        np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
+        - np.sin(status_vec[4]) * np.array([p[0] for p in centroids])
+        + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
-    assert np.any(h_nodes > 0), "警告: 油膜厚度存在非正值，请检查参数设置！"
+    assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查参数设置！"
 
     # 3.2 确定边界条件
     bc_dict = dict(enumerate([p0] * len(mesh.facet_markers)))
 
     # 3.3 计算三角网格中心处的相对运动速度
-    U_nodes = np.array([[omega * p[1], omega * p[0]] for p in centroids])
+    U_cells = np.array([[omega * p[1], omega * p[0]] for p in centroids])
 
     # 3.4 计算三角网格中心处的挤压速度
-    ht_nodes = np.ones(len(centroids)) * ht
+    ht_cells = (
+        np.cos(status_vec[2]) * status_vec[3] * np.array([p[1] for p in centroids])
+         - np.cos(status_vec[4]) * status_vec[5] * np.array([p[0] for p in centroids])
+         + status_vec[1] * np.ones(len(centroids))
+    )
 
     case = ReynoldsSolver(
-        mesh, h_nodes, mu=oil_mu, U_vec=U_nodes, ht=ht_nodes, bc_dict=bc_dict
+        mesh, h_cells, mu=oil_mu, U_cells=U_cells, ht_cells=ht_cells, bc_dict=bc_dict
     )
     p = case.solve()
     F, (i, j) = case.calc_force(p)

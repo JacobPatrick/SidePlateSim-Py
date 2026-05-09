@@ -15,15 +15,12 @@ class GearParameters:
     pressure_angle: float
     inner_radius: float
     rotation_speed: float
+    status_vec: tuple
 
 
 @dataclass
 class FilmParameters:
-    h_base: float
-    h_tilt: tuple
     p_0: float
-    U_vec: tuple
-    ht: float
 
 
 @dataclass

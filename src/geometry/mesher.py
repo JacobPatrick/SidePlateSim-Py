@@ -77,9 +77,10 @@ def shapely_to_meshpy(
 ):
     """
     将含内孔的 Shapely 多边形转换为 meshpy 网格
-    :param poly: 可能含 interior 的 Shapely Polygon
-    :param max_area: 全局最大单元面积
-    :param min_edge_length: 边界清理阈值
+    Args:
+        poly: 可能含 interior 的 Shapely Polygon
+        max_area: 全局最大单元面积
+        min_edge_length: 边界清理阈值
     """
     if not poly.is_valid:
         poly = poly.buffer(0)  # 修复自相交等拓扑错误
@@ -97,6 +98,7 @@ def shapely_to_meshpy(
     for i in range(n_ext):
         all_facets.append([start_idx + i, start_idx + (i + 1) % n_ext])
         facet_markers.append(1)  # 外边界标记为 1
+    # TODO: 精细化控制外边界压力条件
 
     # 2. 处理内轮廓（孔）
     for interior in poly.interiors:

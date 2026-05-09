@@ -12,10 +12,10 @@ class ReynoldsSolver:
     def __init__(
         self,
         mesh: MeshInfo,
-        h_nodes: np.ndarray,
+        h_cells: np.ndarray,
         mu: float,
-        U_vec: np.ndarray,
-        ht: np.ndarray,
+        U_cells: np.ndarray,
+        ht_cells: np.ndarray,
         bc_dict: dict = {},
     ):
         """
@@ -28,10 +28,10 @@ class ReynoldsSolver:
             bc_dict: 边界条件字典 {facet_marker: pressure_value [Pa]}，默认空字典表示无 Dirichlet 边界
         """
         self.mesh = mesh
-        self.h_nodes = h_nodes
+        self.h_cells = h_cells
         self.mu = mu
-        self.U_vec = U_vec
-        self.ht = ht
+        self.U_cells = U_cells
+        self.ht_cells = ht_cells
         self.bc_dict = bc_dict
 
         self.equ = ()
@@ -55,9 +55,8 @@ class ReynoldsSolver:
             p0, p1, p2 = points[e]
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
-        # 单元中心 h 与扩散系数 D = h^3 / (12μ)
-        h_cells = np.mean(self.h_nodes[elements], axis=1)
-        D_cells = h_cells**3 / (12.0 * self.mu)
+        # 扩散系数 D = h^3 / (12μ)
+        D_cells = self.h_cells**3 / (12.0 * self.mu)
 
         # 2. 构建面列表 (内部面 + 边界面)
         edge_to_cell = {}
@@ -125,12 +124,12 @@ class ReynoldsSolver:
                 A[j, j] -= T
 
                 # 对流源项
-                h_f = 0.5 * (h_cells[i] + h_cells[j])
+                h_f = 0.5 * (self.h_cells[i] + self.h_cells[j])
                 conv = (
                     0.5
                     * (
-                        self.U_vec[i, 0] * normal[0]
-                        + self.U_vec[i, 1] * normal[1]
+                        self.U_cells[i, 0] * normal[0]
+                        + self.U_cells[i, 1] * normal[1]
                     )
                     * h_f
                     * length
@@ -152,12 +151,12 @@ class ReynoldsSolver:
                     A[i, i] -= T
                     b[i] -= T * p_bc
 
-                    h_f = h_cells[i]  # 边界采用单元中心值近似
+                    h_f = self.h_cells[i]  # 边界采用单元中心值近似
                     conv = (
                         0.5
                         * (
-                            self.U_vec[i, 0] * h_f * normal[0]
-                            + self.U_vec[i, 1] * h_f * normal[1]
+                            self.U_cells[i, 0] * h_f * normal[0]
+                            + self.U_cells[i, 1] * h_f * normal[1]
                         )
                         * length
                     )
@@ -167,7 +166,7 @@ class ReynoldsSolver:
 
         # 挤压速度场 ht 源项
         for i in range(n_cells):
-            b[i] -= self.ht[i] * areas[i]
+            b[i] -= self.ht_cells[i] * areas[i]
 
         self.equ = (A.tocsr(), b)
 
