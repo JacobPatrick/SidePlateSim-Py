@@ -73,7 +73,10 @@ def _clean_single_loop(coords, min_edge_length=1e-5, resample_factor=1.0):
 
 
 def shapely_to_meshpy(
-    poly: Polygon, max_area: float = 0.5, min_edge_length: float = 1e-5
+    poly: Polygon,
+    max_area: float = 0.5,
+    min_edge_length: float = 1e-5,
+    markers: list = None,
 ):
     """
     将含内孔的 Shapely 多边形转换为 meshpy 网格
@@ -81,6 +84,7 @@ def shapely_to_meshpy(
         poly: 可能含 interior 的 Shapely Polygon
         max_area: 全局最大单元面积
         min_edge_length: 边界清理阈值
+        markers: 边界标记列表 [(marker_coordinate, pressure_value), ...]
     """
     if not poly.is_valid:
         poly = poly.buffer(0)  # 修复自相交等拓扑错误
@@ -92,13 +96,64 @@ def shapely_to_meshpy(
 
     # 1. 处理外轮廓
     ext_clean = _clean_single_loop(list(poly.exterior.coords), min_edge_length)
-    start_idx = 0
-    all_points.extend(ext_clean)
+    ext_arr = np.array(ext_clean)
     n_ext = len(ext_clean)
+
+    # 默认外边界标记为 1
+    ext_marker_ids = np.ones(n_ext, dtype=int)
+
+    markers = markers[1:]  # 排除内边界
+    if markers and n_ext > 0:
+        splits = []  # [(vertex_index, marker_id), ...]
+        for m_id, (coord, _) in enumerate(markers):
+            coord_arr = np.asarray(coord)
+            # 向量化计算到所有边界顶点的距离
+            dists = np.linalg.norm(ext_arr - coord_arr, axis=1)
+            nearest_idx = int(np.argmin(dists))
+            splits.append((nearest_idx, int(m_id) + 1))
+
+            if dists[nearest_idx] > min_edge_length * 3:
+                print(f"警告: 标记点{m_id}：{coord}距离边界顶点过远")
+
+        # 按边界索引排序分割点，插入标记
+        splits.sort(key=lambda x: x[0])
+
+        # 去重： 如果多个标记落在同一边界顶点，保留第一个
+        unique_splits = []
+        seen_indices = set()
+        for idx, m_id in splits:
+            if idx not in seen_indices:
+                unique_splits.append((idx, m_id))
+                seen_indices.add(idx)
+        splits = unique_splits
+
+        # 分配区间标记
+        num_splits = len(splits)
+        for i in range(num_splits):
+            s_idx, marker = splits[i]
+            e_idx = splits[(i + 1) % num_splits][
+                0
+            ]  # 总是选择下一个点，实现闭环
+
+            # 仅有一个分段点时，起点终点重合，无需标记区间
+            if s_idx == e_idx:
+                break
+
+            # 标记边区间 [s_idx, e_idx)
+            if s_idx < e_idx:
+                ext_marker_ids[s_idx:e_idx] = marker
+
+            # 跨越边界起点/终点 (wrap-around)
+            else:
+                ext_marker_ids[s_idx:] = marker
+                ext_marker_ids[:e_idx] = marker
+
+    # 生成外边界 Facets 及对应标记
     for i in range(n_ext):
-        all_facets.append([start_idx + i, start_idx + (i + 1) % n_ext])
-        facet_markers.append(1)  # 外边界标记为 1
-    # TODO: 精细化控制外边界压力条件
+        all_facets.append([i, (i + 1) % n_ext])
+        facet_markers.append(int(ext_marker_ids[i]))
+
+    all_points.extend(ext_clean)
 
     # 2. 处理内轮廓（孔）
     for interior in poly.interiors:
@@ -111,10 +166,9 @@ def shapely_to_meshpy(
         n_int = len(int_clean)
         for i in range(n_int):
             all_facets.append([start_idx + i, start_idx + (i + 1) % n_int])
-            facet_markers.append(2)  # 内孔边界标记为 2
+            facet_markers.append(0)  # 内孔边界标记为 0
 
-        # 孔定位点：Triangle 依赖此点识别“需挖空区域”
-        # 使用 centroid 通常足够，复杂形状可改用 representative_point()
+        # 孔定位点： Triangle 依赖此点识别空洞区域
         holes.append([interior.centroid.x, interior.centroid.y])
 
     points_arr = np.array(all_points, dtype=float)

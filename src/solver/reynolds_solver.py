@@ -16,7 +16,7 @@ class ReynoldsSolver:
         mu: float,
         U_cells: np.ndarray,
         ht_cells: np.ndarray,
-        bc_dict: dict = {},
+        bc_lst: list = [],
     ):
         """
         Args:
@@ -25,14 +25,14 @@ class ReynoldsSolver:
             mu: 动力粘度 [Pa·s]
             U_cells: 壁面相对速度向量场 (N, 2) [m/s]
             ht_cells: 挤压速度场 (N,) [m/s]
-            bc_dict: 边界条件字典 {facet_marker: pressure_value [Pa]}，默认空字典表示无 Dirichlet 边界
+            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
         """
         self.mesh = mesh
         self.h_cells = h_cells
         self.mu = mu
         self.U_cells = U_cells
         self.ht_cells = ht_cells
-        self.bc_dict = bc_dict
+        self.bc_lst = bc_lst
 
         self.equ = ()
         self.assemble_reynolds_fvm()
@@ -144,8 +144,8 @@ class ReynoldsSolver:
                     normal = -normal
 
                 marker = face['marker']
-                if marker in self.bc_dict:  # Dirichlet 压力边界
-                    p_bc = self.bc_dict[marker]
+                if marker < len(self.bc_lst):  # Dirichlet 压力边界
+                    p_bc = self.bc_lst[marker]
                     dist = np.linalg.norm(centroids[i] - mid_pt)
                     T = D_cells[i] * length / dist
                     A[i, i] -= T
@@ -161,8 +161,6 @@ class ReynoldsSolver:
                         * length
                     )
                     b[i] -= conv
-
-        print(i)
 
         # 挤压速度场 ht 源项
         for i in range(n_cells):

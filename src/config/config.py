@@ -20,7 +20,7 @@ class GearParameters:
 
 @dataclass
 class FilmParameters:
-    p_0: float
+    p_lst: list
 
 
 @dataclass

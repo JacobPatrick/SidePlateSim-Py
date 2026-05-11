@@ -32,7 +32,7 @@ def main():
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 油膜参数
-    p0 = np.float64(params.film.p_0)
+    p_lst = eval(params.film.p_lst)
 
     # 1. 生成齿轮轮廓（单齿轮廓）
     print(
@@ -47,7 +47,7 @@ def main():
     tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
 
     # 2. 划分网格
-    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7)
+    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
 
     # 3. 求仿真油膜参数表
     points = np.array(mesh.points)
@@ -66,7 +66,9 @@ def main():
     ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
 
     # 3.2 确定边界条件
-    bc_dict = dict(enumerate([p0] * len(mesh.facet_markers)))
+    bc_lst = [p_lst[0]]
+    for _, p_val in p_lst[1:]:
+        bc_lst.append(p_val)
 
     # 3.3 计算三角网格中心处的相对运动速度
     U_cells = np.array([[omega * p[1], omega * p[0]] for p in centroids])
@@ -88,13 +90,13 @@ def main():
         mu=oil_mu,
         U_cells=U_cells,
         ht_cells=ht_cells,
-        bc_dict=bc_dict,
+        bc_lst=bc_lst,
     )
     p = case.solve()
     F, (i, j) = case.calc_force(p)
 
     plot_pressure_distribution(
-        mesh, p, fig_name="pressure_distribution", mode='save'
+        mesh, p, fig_name="pressure_distribution", mode='show'
     )
     print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 
