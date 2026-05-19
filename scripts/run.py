@@ -5,11 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import (
-    plot_shapely_poly,
-    plot_mesh,
-    plot_pressure_distribution,
-)
+from src.postproc.visualize import plot_pressure_distribution
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
@@ -71,7 +67,7 @@ def main():
         bc_lst.append(p_val)
 
     # 3.3 计算三角网格中心处的相对运动速度
-    U_cells = np.array([[omega * p[1], omega * p[0]] for p in centroids])
+    U_cells = np.array([[-omega * p[1], omega * p[0]] for p in centroids])
 
     # 3.4 计算三角网格中心处的挤压速度
     ht_cells = (
@@ -96,7 +92,7 @@ def main():
     F, (i, j) = case.calc_force(p)
 
     plot_pressure_distribution(
-        mesh, p, fig_name="pressure_distribution", mode='show'
+        mesh, p, fig_name="pressure_distribution", mode='save'
     )
     print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 

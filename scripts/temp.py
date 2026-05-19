@@ -5,11 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import (
-    plot_shapely_poly,
-    plot_mesh,
-    plot_pressure_distribution,
-)
+from src.postproc.visualize import plot_pressure_distribution
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
@@ -32,7 +28,7 @@ def main():
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 油膜参数
-    p0 = np.float64(params.film.p_0)
+    p_lst = eval(params.film.p_lst)
 
     # 1. 生成齿轮轮廓（单齿轮廓）
     print(
@@ -45,18 +41,15 @@ def main():
         pressure_angle=pressure_angle,
     )
     tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
-    # plot_shapely_poly(gear_poly, fig_name="gear_profile", mode='save')
-    # plot_shapely_poly(
-    #     tooth_poly,
-    #     fig_name=f"tooth_profile",
-    # )
+
     # 2. 划分网格
-    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7)
+    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
 
     # 3. 求仿真油膜参数表
     points = np.array(mesh.points)
     elements = np.array(mesh.elements)
     centroids = np.mean(points[elements], axis=1)
+
     # 3.1 计算节点处的油膜厚度
     h_cells = (
         np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
@@ -64,13 +57,17 @@ def main():
         + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
-    assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查参数设置！"
+    assert np.any(
+        h_cells > 0
+    ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
 
     # 3.2 确定边界条件
-    bc_dict = dict(enumerate([p0] * len(mesh.facet_markers)))
+    bc_lst = [p_lst[0]]
+    for _, p_val in p_lst[1:]:
+        bc_lst.append(p_val)
 
     # 3.3 计算三角网格中心处的相对运动速度
-    U_cells = np.array([[omega * p[1], omega * p[0]] for p in centroids])
+    U_cells = np.array([[-omega * p[1], omega * p[0]] for p in centroids])
 
     # 3.4 计算三角网格中心处的挤压速度
     ht_cells = (
@@ -89,7 +86,7 @@ def main():
         mu=oil_mu,
         U_cells=U_cells,
         ht_cells=ht_cells,
-        bc_dict=bc_dict,
+        bc_lst=bc_lst,
     )
     p = case.solve()
     F, (i, j) = case.calc_force(p)

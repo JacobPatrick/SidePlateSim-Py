@@ -170,10 +170,10 @@ class ReynoldsSolver:
 
     def solve(self):
         """
-        求解线性系统 Ax=b，返回压力分布 p
+        求解线性系统 A * x = b，返回压力分布 p
         """
-
         p = spsolve(self.equ[0], self.equ[1])
+
         return p
 
     def calc_force(self, p):
@@ -194,3 +194,88 @@ class ReynoldsSolver:
         j = np.sum(p * centroids[:, 1] * areas) / F
 
         return F, (i, j)
+
+    def calc_flow(self, p):
+        """
+        根据压力场求流速场
+        """
+        # 1. 计算单元中心的压力梯度
+        px, py = self._calc_pressure_grediant(p)
+
+        # 2. 根据压力梯度求流速
+        average_u = -px / (12 * self.mu) + 0.5 * self.U_cells[:, 0]
+        average_v = -py / (12 * self.mu) + 0.5 * self.U_cells[:, 1]
+
+        return average_u, average_v
+
+    def _calc_pressure_grediant(self, p):
+        """
+        计算单元中心的压力梯度
+        """
+        # 1. 对单元 i，找到其相邻单元 j，获得相邻单元的压力 p_j 和单元中心坐标
+        points = np.array(self.mesh.points)
+        elements = np.array(self.mesh.elements)
+        centroids = np.mean(points[elements], axis=1)
+        n_cells = len(elements)
+
+        if hasattr(self.mesh, 'neighbors'):
+            neighbors_raw = np.array(self.mesh.neighbors)  # shape: (n_cells, 3), -1 表示边界
+        else:
+            raise AttributeError("meshpy 对象未提供 neighbors 属性")
+
+        # 构建单元邻接列表
+        cell_neighbors = [None] * n_cells
+        for i in range(n_cells):
+            cell_neighbors[i] = neighbors_raw[i].tolist()
+        
+        # 筛选边界单元
+        internal_mask = np.all(neighbors_raw >= 0, axis=1)
+        external_indices = np.where(~internal_mask)[0]
+
+        # 镜像得到虚拟相邻单元
+        for i in external_indices:
+            for k in range(3):
+                if neighbors_raw[i, k] == -1:
+                    n1, n2 = int(elements[i, k]), int(elements[i, (k + 1) % 3])
+                    p1, p2 = points[n1], points[n2]
+                    edge_vec = p2 - p1
+                    length = np.linalg.norm(edge_vec)
+                    normal = np.array([edge_vec[1], -edge_vec[0]]) / length
+
+                    mid_pt = (p1 + p2) / 2.0
+                    if np.dot(normal, mid_pt - centroids[i]) < 0:
+                        normal = -normal
+
+                    # 镜像单元中心坐标
+                    vec_to_mid = mid_pt - centroids[i]
+                    mirrored_centroid = centroids[i] + 2 * vec_to_mid
+
+                    # 添加虚拟单元 j
+                    j = len(cell_neighbors)
+                    cell_neighbors[i][k] = j
+                    centroids = np.vstack([centroids, mirrored_centroid])
+                    p = np.append(p, p[i])  # 虚拟单元压力与原单元相同
+        
+        # 2. 构建矩阵 A 和向量 b
+        A = lil_matrix((3 *n_cells, 2 *n_cells))
+        b = np.zeros(3 * n_cells)
+
+        for i in range(n_cells):
+            count = 0
+            for j in cell_neighbors[i]:
+                dx = centroids[j, 0] - centroids[i, 0]
+                dy = centroids[j, 1] - centroids[i, 1]
+                dp = p[j] - p[i]
+
+                A[3 * i + count, 2 * i] = dx
+                A[3 * i + count, 2 * i + 1] = dy
+                b[3 * i + count] = dp
+
+                count += 1
+        
+        # 3. LS 求解超定方程组 A * (px, py) = b
+        p = spsolve(A.T @ A, A.T @ b)
+        px = np.array([p[2 * i] for i in range(n_cells)])
+        py = np.array([p[2 * i + 1] for i in range(n_cells)])
+        
+        return px, py
