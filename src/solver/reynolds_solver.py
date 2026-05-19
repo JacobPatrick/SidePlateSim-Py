@@ -16,6 +16,7 @@ class ReynoldsSolver:
         mu: float,
         U_cells: np.ndarray,
         ht_cells: np.ndarray,
+        h_grad: tuple,
         bc_lst: list = [],
     ):
         """
@@ -32,6 +33,7 @@ class ReynoldsSolver:
         self.mu = mu
         self.U_cells = U_cells
         self.ht_cells = ht_cells
+        self.h_grad = h_grad
         self.bc_lst = bc_lst
 
         self.equ = ()
@@ -123,20 +125,6 @@ class ReynoldsSolver:
                 A[j, i] += T
                 A[j, j] -= T
 
-                # 对流源项
-                h_f = 0.5 * (self.h_cells[i] + self.h_cells[j])
-                conv = (
-                    0.5
-                    * (
-                        self.U_cells[i, 0] * normal[0]
-                        + self.U_cells[i, 1] * normal[1]
-                    )
-                    * h_f
-                    * length
-                )
-                b[i] -= conv  # 流出 i 为负贡献
-                b[j] += conv  # 流入 j 为正贡献
-
             else:  # 边界面
                 # 校准法向：确保指向单元外部
                 mid_pt = (p1 + p2) / 2.0
@@ -151,20 +139,14 @@ class ReynoldsSolver:
                     A[i, i] -= T
                     b[i] -= T * p_bc
 
-                    h_f = self.h_cells[i]  # 边界采用单元中心值近似
-                    conv = (
-                        0.5
-                        * (
-                            self.U_cells[i, 0] * h_f * normal[0]
-                            + self.U_cells[i, 1] * h_f * normal[1]
-                        )
-                        * length
-                    )
-                    b[i] -= conv
-
-        # 挤压速度场 ht 源项
+        # RHS
         for i in range(n_cells):
-            b[i] -= self.ht_cells[i] * areas[i]
+            conv = 0.5 * (
+                self.U_cells[i, 0] * self.h_grad[0]
+                + self.U_cells[i, 1] * self.h_grad[1]
+            )
+            ht = self.ht_cells[i]
+            b[i] -= (conv + ht) * areas[i]
 
         self.equ = (A.tocsr(), b)
 
