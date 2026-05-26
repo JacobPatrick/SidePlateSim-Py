@@ -24,7 +24,6 @@ def main():
     status_vec = eval(params.gear.status_vec)
 
     # 油液物性
-    # oil_rho = np.float64(params.fluid.density)
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 油膜参数
@@ -40,10 +39,10 @@ def main():
         inner_radius=inner_radius,
         pressure_angle=pressure_angle,
     )
-    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    _tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
 
     # 2. 划分网格
-    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
+    mesh = shapely_to_meshpy(gear_poly, max_area=2e-8, markers=p_lst)
 
     # 3. 求仿真油膜参数表
     points = np.array(mesh.points)
@@ -52,14 +51,16 @@ def main():
 
     # 3.1 计算节点处的油膜厚度
     h_cells = (
-        np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
-        - np.sin(status_vec[4]) * np.array([p[0] for p in centroids])
+        -np.sin(status_vec[4]) * np.array([p[0] for p in centroids])
+        + np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
         + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
     assert np.any(
         h_cells > 0
     ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
+    # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
+    h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
 
     # 3.2 确定边界条件
     bc_lst = [p_lst[0]]
@@ -86,6 +87,7 @@ def main():
         mu=oil_mu,
         U_cells=U_cells,
         ht_cells=ht_cells,
+        h_grad=h_grad,
         bc_lst=bc_lst,
     )
     p = case.solve()

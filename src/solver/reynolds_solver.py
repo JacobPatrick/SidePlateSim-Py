@@ -96,6 +96,11 @@ class ReynoldsSolver:
         ), f"网格未闭合或 facets 不匹配，剩余 {len(edge_to_cell)} 条边"
 
         # 3. 稀疏矩阵组装
+        if not self.bc_lst:
+            raise ValueError("Dirichlet 边界必需，但 bc_lst 为空")
+        default_p = self.bc_lst[0]
+        bc_map = {idx: p_val for idx, p_val in enumerate(self.bc_lst)}
+
         A = lil_matrix((n_cells, n_cells))
         b = np.zeros(n_cells)
 
@@ -132,12 +137,11 @@ class ReynoldsSolver:
                     normal = -normal
 
                 marker = face['marker']
-                if marker < len(self.bc_lst):  # Dirichlet 压力边界
-                    p_bc = self.bc_lst[marker]
-                    dist = np.linalg.norm(centroids[i] - mid_pt)
-                    T = D_cells[i] * length / dist
-                    A[i, i] -= T
-                    b[i] -= T * p_bc
+                p_bc = bc_map.get(marker, default_p)
+                dist = np.linalg.norm(centroids[i] - mid_pt)
+                T = D_cells[i] * length / dist
+                A[i, i] -= T
+                b[i] -= T * p_bc
 
         # RHS
         for i in range(n_cells):
