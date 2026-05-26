@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import tri as mtri
+from matplotlib import cm, colors
 from datetime import datetime
 
 
@@ -71,6 +72,38 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, mode='save'):
     c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
     ax.set_aspect('equal')
     plt.colorbar(c, ax=ax, label='Pressure [Pa]')
+    if mode == 'save':
+        plt.savefig(
+            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            dpi=300,
+        )
+    elif mode == 'show':
+        plt.show()
+    plt.close()
+
+
+def plot_leak_rate(mesh, leak_rate, fig_name, mode='save'):
+    _, ax = plt.subplots(figsize=(7, 6))
+    facets = np.array(mesh.facets)
+
+    vmin = float(np.min(leak_rate))
+    vmax = float(np.max(leak_rate))
+    abs_max = max(abs(vmin), abs(vmax))
+    vmin, vmax = -abs_max, abs_max  # 设置对称的 colorbar 范围
+    if vmin == vmax:
+        vmax = vmin + 1.0
+    norm = colors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = cm.get_cmap('jet')
+
+    for idx, facet_points in enumerate(facets):
+        x = [mesh.points[j][0] for j in facet_points]
+        y = [mesh.points[j][1] for j in facet_points]
+        color = cmap(norm(leak_rate[idx]))
+        ax.plot(x, y, color=color, linewidth=1)
+
+    sm = cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    plt.colorbar(sm, ax=ax, label='Leak Rate [m^3/s]')
     if mode == 'save':
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
