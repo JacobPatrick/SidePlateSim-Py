@@ -5,7 +5,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import plot_pressure_distribution
+from src.postproc.visualize import (
+    plot_shapely_poly,
+    plot_mesh,
+    plot_pressure_distribution,
+    plot_leak_rate
+)
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
@@ -39,10 +44,9 @@ def main():
         inner_radius=inner_radius,
         pressure_angle=pressure_angle,
     )
-    _tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
-
+    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
     # 2. 划分网格
-    mesh = shapely_to_meshpy(gear_poly, max_area=2e-8, markers=p_lst)
+    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
 
     # 3. 求仿真油膜参数表
     points = np.array(mesh.points)
@@ -59,8 +63,6 @@ def main():
     assert np.any(
         h_cells > 0
     ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
-    # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
-    h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
 
     # 3.2 确定边界条件
     bc_lst = [p_lst[0]]
@@ -87,16 +89,18 @@ def main():
         mu=oil_mu,
         U_cells=U_cells,
         ht_cells=ht_cells,
-        h_grad=h_grad,
-        bc_lst=bc_lst,
+        bc_dict=bc_lst,
     )
     p = case.solve()
-    F, (i, j) = case.calc_force(p)
+    # F, (i, j) = case.calc_force(p)
 
-    plot_pressure_distribution(
-        mesh, p, fig_name="pressure_distribution", mode='save'
-    )
-    print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
+    # plot_pressure_distribution(
+    #     mesh, p, fig_name="pressure_distribution", mode='save'
+    # )
+    # print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
+
+    leak_rate = case.calc_leakage(p)
+    plot_leak_rate(mesh, leak_rate, fig_name="leak_rate", mode='save')
 
 
 if __name__ == '__main__':
