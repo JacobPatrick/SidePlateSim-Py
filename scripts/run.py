@@ -70,7 +70,7 @@ def main():
     # 3.3 计算三角网格中心处的相对运动速度
     U_cells = np.array([[-omega * p[1], omega * p[0]] for p in centroids])
 
-    # 3.4 计算三角网格中心处的挤压速度
+    # 3.4 计算三角网格中心处的挤压速度（两表面相互接近为正）
     ht_cells = (
         np.cos(status_vec[2])
         * status_vec[3]
