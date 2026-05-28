@@ -12,7 +12,7 @@ from src.config.config import load_config
 
 
 def main():
-    params = load_config('SimParams_1')
+    params = load_config('SimParams_2')
 
     # 齿轮参数
     module = np.float64(params.gear.module)

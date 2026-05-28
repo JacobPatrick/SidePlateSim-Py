@@ -9,7 +9,7 @@ from src.postproc.visualize import (
     plot_shapely_poly,
     plot_mesh,
     plot_pressure_distribution,
-    plot_leak_rate
+    plot_leak_rate,
 )
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver

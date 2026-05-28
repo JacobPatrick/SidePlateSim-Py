@@ -2,5 +2,7 @@
 data/
 results/
 config/*.yml
+check.py
+prompt.md
 __pycache__
 temp.py

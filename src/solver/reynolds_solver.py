@@ -150,7 +150,7 @@ class ReynoldsSolver:
                 + self.U_cells[i, 1] * self.h_grad[1]
             )
             ht = self.ht_cells[i]
-            b[i] -= (conv + ht) * areas[i]
+            b[i] += (conv + ht) * areas[i]
 
         self.equ = (A.tocsr(), b)
 
