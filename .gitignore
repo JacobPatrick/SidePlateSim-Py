@@ -1,5 +1,6 @@
 .vscode/
 data/
+assets/
 results/
 config/*.yml
 check.py
