@@ -12,5 +12,6 @@ dependencies:
   - meshpy>=2.0
   - pip
   - pip:
+      - ezdxf >=1.4.4
       - pyvista>=0.40 # 可选：高级可视化
       - tqdm>=4.65 # 可选：进度条

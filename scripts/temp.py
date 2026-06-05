@@ -14,6 +14,7 @@ from src.postproc.visualize import (
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
+from utils.load_geometry import load_gear_profile_from_dxf
 
 
 def main():
@@ -38,13 +39,14 @@ def main():
     print(
         f"生成参数: 齿数={teeth_num}, 模数={module}, 内径={inner_radius}, 压力角={pressure_angle}°"
     )
-    gear = InvoluteGear(
-        module=module,
-        teeth_num=teeth_num,
-        inner_radius=inner_radius,
-        pressure_angle=pressure_angle,
-    )
-    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    # gear = InvoluteGear(
+    #     module=module,
+    #     teeth_num=teeth_num,
+    #     inner_radius=inner_radius,
+    #     pressure_angle=pressure_angle,
+    # )
+    # tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
     # 2. 划分网格
     mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
 
@@ -63,6 +65,8 @@ def main():
     assert np.any(
         h_cells > 0
     ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
+    # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
+    h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
 
     # 3.2 确定边界条件
     bc_lst = [p_lst[0]]
@@ -89,18 +93,19 @@ def main():
         mu=oil_mu,
         U_cells=U_cells,
         ht_cells=ht_cells,
-        bc_dict=bc_lst,
+        h_grad=h_grad,
+        bc_lst=bc_lst,
     )
     p = case.solve()
-    # F, (i, j) = case.calc_force(p)
+    F, (i, j) = case.calc_force(p)
 
-    # plot_pressure_distribution(
-    #     mesh, p, fig_name="pressure_distribution", mode='save'
-    # )
-    # print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
+    plot_pressure_distribution(
+        mesh, p, fig_name="pressure_distribution", mode='save'
+    )
+    print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 
-    leak_rate = case.calc_leakage(p)
-    plot_leak_rate(mesh, leak_rate, fig_name="leak_rate", mode='save')
+    # leak_rate = case.calc_leakage(p)
+    # plot_leak_rate(mesh, leak_rate, fig_name="leak_rate", mode='save')
 
 
 if __name__ == '__main__':

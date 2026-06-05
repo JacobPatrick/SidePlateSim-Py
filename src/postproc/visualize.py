@@ -21,7 +21,7 @@ def plot_shapely_poly(poly, fig_name, mode='save'):
 
         for interior in p.interiors:
             xi, yi = interior.xy
-            ax.plot(xi, yi, 'b-', linewidth=1.5)
+            ax.plot(xi, yi, 'r-', linewidth=1.5)
 
     ax.set_aspect('equal')
     ax.grid(True, alpha=0.3)
