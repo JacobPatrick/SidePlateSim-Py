@@ -72,13 +72,13 @@ def main():
 
     # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
     ht_cells = (
-        np.cos(status_vec[4])
-        * status_vec[5]
-        * np.array([p[0] for p in centroids])
-        - np.cos(status_vec[2])
+        status_vec[1] * np.ones(len(centroids))
+        + np.cos(status_vec[2])
         * status_vec[3]
         * np.array([p[1] for p in centroids])
-        - status_vec[1] * np.ones(len(centroids))
+        - np.cos(status_vec[4])
+        * status_vec[5]
+        * np.array([p[0] for p in centroids])
     )
 
     case = ReynoldsSolver(

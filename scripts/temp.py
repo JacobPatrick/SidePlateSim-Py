@@ -39,14 +39,14 @@ def main():
     print(
         f"生成参数: 齿数={teeth_num}, 模数={module}, 内径={inner_radius}, 压力角={pressure_angle}°"
     )
-    # gear = InvoluteGear(
-    #     module=module,
-    #     teeth_num=teeth_num,
-    #     inner_radius=inner_radius,
-    #     pressure_angle=pressure_angle,
-    # )
-    # tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
-    gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
+    gear = InvoluteGear(
+        module=module,
+        teeth_num=teeth_num,
+        inner_radius=inner_radius,
+        pressure_angle=pressure_angle,
+    )
+    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    # gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
     # 2. 划分网格
     mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
 
@@ -78,13 +78,13 @@ def main():
 
     # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
     ht_cells = (
-        np.cos(status_vec[4])
-        * status_vec[5]
-        * np.array([p[0] for p in centroids])
-        - np.cos(status_vec[2])
+        status_vec[1] * np.ones(len(centroids))
+        + np.cos(status_vec[2])
         * status_vec[3]
         * np.array([p[1] for p in centroids])
-        - status_vec[1] * np.ones(len(centroids))
+        - np.cos(status_vec[4])
+        * status_vec[5]
+        * np.array([p[0] for p in centroids])
     )
 
     case = ReynoldsSolver(

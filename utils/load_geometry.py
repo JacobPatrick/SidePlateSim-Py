@@ -29,11 +29,11 @@ def _path_to_lines(path, distance, min_segments):
 
 def load_geometry_from_dxf(
     file_path,
-    arc_samples=16,
-    angular_step_deg=2.0,
-    simplify_tolerance=0.01,
+    arc_samples=4,
+    angular_step_deg=3.0,
+    simplify_tolerance=0.1,
     snap_tolerance=0.0,
-    max_flatten_distance=0.02,
+    max_flatten_distance=0.2,
 ):
     """从DXF文件加载几何轮廓，返回 Polygon/MultiPolygon（不区分内外轮廓）"""
     doc = ezdxf.readfile(file_path)
