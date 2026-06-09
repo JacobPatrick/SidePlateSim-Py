@@ -2,6 +2,7 @@
 data/
 assets/
 results/
+tests/
 config/*.yml
 check.py
 prompt.md

@@ -14,7 +14,11 @@ from src.postproc.visualize import (
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
-from utils.load_geometry import load_gear_profile_from_dxf
+from utils.load_geometry import (
+    load_profile_from_dxf,
+    load_gear_profile_from_dxf,
+    boolean_operation,
+)
 
 
 def main():
@@ -45,10 +49,14 @@ def main():
         inner_radius=inner_radius,
         pressure_angle=pressure_angle,
     )
-    tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
-    # gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
+    # tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
+    relief_poly = load_profile_from_dxf("assets/relief.DXF")
+    film_poly = boolean_operation(
+        gear_poly, relief_poly, operation="difference"
+    )
     # 2. 划分网格
-    mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)
+    mesh = shapely_to_meshpy(film_poly, max_area=1e-7, markers=p_lst)
 
     # 3. 求仿真油膜参数表
     points = np.array(mesh.points)
