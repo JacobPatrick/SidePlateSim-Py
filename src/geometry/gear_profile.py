@@ -40,7 +40,7 @@ class InvoluteGear:
         if self.inner_radius >= self.r_f:
             raise ValueError("Inner radius is invalid.")
 
-    def generate_single_tooth_profile(self, backlash=0.0, frame_count=32):
+    def generate_gear_profile(self, backlash=0.0, frame_count=32):
         """生成标准渐开线直齿轮齿廓"""
         tooth_width = self.module * np.pi / 2.0 - backlash
 
