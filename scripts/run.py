@@ -9,16 +9,16 @@ from src.postproc.visualize import plot_pressure_distribution
 from src.geometry.mesher import shapely_to_meshpy
 from src.solver.reynolds_solver import ReynoldsSolver
 from src.config.config import load_config
+from utils.load_geometry import (
+    load_geometry_from_dxf,
+    load_gear_profile_from_dxf,
+)
 
 
 def main():
     params = load_config('SimParams_2')
 
     # 齿轮参数
-    module = np.float64(params.gear.module)
-    teeth_num = int(params.gear.num_teeth)
-    inner_radius = np.float64(params.gear.inner_radius)
-    pressure_angle = np.float64(params.gear.pressure_angle)
     rotation_speed = np.float64(params.gear.rotation_speed)
     omega = rotation_speed * 2 * np.pi / 60.0  # 转速转换为角速度 [rad/s]
     status_vec = eval(params.gear.status_vec)
@@ -29,17 +29,8 @@ def main():
     # 油膜参数
     p_lst = eval(params.film.p_lst)
 
-    # 1. 生成齿轮轮廓（单齿轮廓）
-    print(
-        f"生成参数: 齿数={teeth_num}, 模数={module}, 内径={inner_radius}, 压力角={pressure_angle}°"
-    )
-    gear = InvoluteGear(
-        module=module,
-        teeth_num=teeth_num,
-        inner_radius=inner_radius,
-        pressure_angle=pressure_angle,
-    )
-    _tooth_poly, gear_poly = gear.generate_single_tooth_profile(frame_count=8)
+    # 1. 导入齿轮轮廓
+    gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
 
     # 2. 划分网格
     mesh = shapely_to_meshpy(gear_poly, max_area=1e-7, markers=p_lst)

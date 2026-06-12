@@ -63,15 +63,27 @@ def plot_mesh(mesh, fig_name, mode='save'):
     plt.close()
 
 
-def plot_pressure_distribution(mesh, p_cells, fig_name, mode='save'):
+def plot_pressure_distribution(mesh, p_cells, fig_name, contour='True', mode='save'):
+    points = np.array(mesh.points)
+    elements = np.array(mesh.elements)
+    centroids = np.mean(points[elements], axis=1)
+
     _, ax = plt.subplots(figsize=(6, 6))
-    x_lst = [mesh.points[i][0] for i in range(len(mesh.points))]
-    y_lst = [mesh.points[i][1] for i in range(len(mesh.points))]
-    triang = mtri.Triangulation(x_lst, y_lst, triangles=mesh.elements)
+    x_lst = [points[i][0] for i in range(len(points))]
+    y_lst = [points[i][1] for i in range(len(points))]
+    triang = mtri.Triangulation(x_lst, y_lst, triangles=elements)
     c = ax.tripcolor(triang, facecolors=p_cells, cmap='jet', shading='flat')
     c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
     ax.set_aspect('equal')
     plt.colorbar(c, ax=ax, label='Pressure [Pa]')
+
+    if contour == 'True':
+        cx = centroids[:, 0]
+        cy = centroids[:, 1]
+
+        # 将单元中心点坐标与压力值配对，绘制等高线
+        ax.tricontour(cx, cy, p_cells, levels=10, colors='black', linewidths=0.5, alpha=0.5)
+
     if mode == 'save':
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
