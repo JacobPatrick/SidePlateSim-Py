@@ -16,7 +16,7 @@ from utils.load_geometry import (
 
 
 def main():
-    params = load_config('SimParams_2')
+    params = load_config("SimParams_2")
 
     # 齿轮参数
     rotation_speed = np.float64(params.gear.rotation_speed)
@@ -47,9 +47,7 @@ def main():
         + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
-    assert np.any(
-        h_cells > 0
-    ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
+    assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
     # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
     h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
 
@@ -64,12 +62,8 @@ def main():
     # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
     ht_cells = (
         status_vec[1] * np.ones(len(centroids))
-        + np.cos(status_vec[2])
-        * status_vec[3]
-        * np.array([p[1] for p in centroids])
-        - np.cos(status_vec[4])
-        * status_vec[5]
-        * np.array([p[0] for p in centroids])
+        + np.cos(status_vec[2]) * status_vec[3] * np.array([p[1] for p in centroids])
+        - np.cos(status_vec[4]) * status_vec[5] * np.array([p[0] for p in centroids])
     )
 
     case = ReynoldsSolver(
@@ -84,11 +78,9 @@ def main():
     p = case.solve()
     F, (i, j) = case.calc_force(p)
 
-    plot_pressure_distribution(
-        mesh, p, fig_name="pressure_distribution", mode='save'
-    )
+    plot_pressure_distribution(mesh, p, fig_name="pressure_distribution", mode="save")
     print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

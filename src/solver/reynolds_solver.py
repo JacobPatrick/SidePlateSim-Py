@@ -71,7 +71,7 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({'cells': (j, i), 'nodes': key, 'marker': 0})
+                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
                 else:
                     edge_to_cell[key] = i
 
@@ -84,9 +84,9 @@ class ReynoldsSolver:
                 i = edge_to_cell.pop(key)
                 faces.append(
                     {
-                        'cells': (i, None),
-                        'nodes': (n1, n2),
-                        'marker': int(facet_markers[idx]),
+                        "cells": (i, None),
+                        "nodes": (n1, n2),
+                        "marker": int(facet_markers[idx]),
                     }
                 )
 
@@ -105,17 +105,17 @@ class ReynoldsSolver:
         b = np.zeros(n_cells)
 
         for face in faces:
-            n1, n2 = face['nodes']
+            n1, n2 = face["nodes"]
             p1, p2 = points[n1], points[n2]
             edge_vec = p2 - p1
             length = np.linalg.norm(edge_vec)
             # 初始局部法向 (基于边向量逆时针旋转90°)
             normal = np.array([edge_vec[1], -edge_vec[0]]) / length
 
-            i = face['cells'][0]
+            i = face["cells"][0]
 
-            if face['cells'][1] is not None:  # 内部面
-                j = face['cells'][1]
+            if face["cells"][1] is not None:  # 内部面
+                j = face["cells"][1]
                 # 校准法向：确保从 owner(i) 指向 neighbor(j)
                 vec_ij = centroids[j] - centroids[i]
                 if np.dot(normal, vec_ij) < 0:
@@ -136,7 +136,7 @@ class ReynoldsSolver:
                 if np.dot(normal, mid_pt - centroids[i]) < 0:
                     normal = -normal
 
-                marker = face['marker']
+                marker = face["marker"]
                 p_bc = bc_map.get(marker, default_p)
                 dist = np.linalg.norm(centroids[i] - mid_pt)
                 T = D_cells[i] * length / dist
@@ -205,7 +205,7 @@ class ReynoldsSolver:
         centroids = np.mean(points[elements], axis=1)
         n_cells = len(elements)
 
-        if hasattr(self.mesh, 'neighbors'):
+        if hasattr(self.mesh, "neighbors"):
             neighbors_raw = np.array(
                 self.mesh.neighbors
             )  # shape: (n_cells, 3), -1 表示边界
@@ -293,7 +293,7 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({'cells': (j, i), 'nodes': key, 'marker': 0})
+                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
                 else:
                     edge_to_cell[key] = i
 
@@ -305,9 +305,9 @@ class ReynoldsSolver:
                 i = edge_to_cell.pop(key)
                 faces.append(
                     {
-                        'cells': (i, None),
-                        'nodes': (n1, n2),
-                        'marker': int(facet_markers[idx]),
+                        "cells": (i, None),
+                        "nodes": (n1, n2),
+                        "marker": int(facet_markers[idx]),
                     }
                 )
 
@@ -316,11 +316,11 @@ class ReynoldsSolver:
         leak_rate = []
 
         for face in faces:
-            if face['cells'][1] is not None or face['marker'] == 0:
+            if face["cells"][1] is not None or face["marker"] == 0:
                 continue
 
-            i = face['cells'][0]
-            n1, n2 = face['nodes']
+            i = face["cells"][0]
+            n1, n2 = face["nodes"]
             p1, p2 = points[n1], points[n2]
             edge_vec = p2 - p1
             length = np.linalg.norm(edge_vec)

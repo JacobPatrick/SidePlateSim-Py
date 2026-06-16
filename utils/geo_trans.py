@@ -31,9 +31,7 @@ def transform_operation(
         raise TypeError("输入轮廓类型必须是 Polygon 或 MultiPolygon")
     # 平移
     if transform == "translate":
-        return translate(
-            profile, xoff=translate_param[0], yoff=translate_param[1]
-        )
+        return translate(profile, xoff=translate_param[0], yoff=translate_param[1])
     # 缩放
     elif transform == "scale":
         profile = scale(

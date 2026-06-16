@@ -131,9 +131,7 @@ def shapely_to_meshpy(
         num_splits = len(splits)
         for i in range(num_splits):
             s_idx, marker = splits[i]
-            e_idx = splits[(i + 1) % num_splits][
-                0
-            ]  # 总是选择下一个点，实现闭环
+            e_idx = splits[(i + 1) % num_splits][0]  # 总是选择下一个点，实现闭环
 
             # 仅有一个分段点时，起点终点重合，无需标记区间
             if s_idx == e_idx:

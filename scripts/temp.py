@@ -21,10 +21,11 @@ from utils.load_geometry import (
 from utils.geo_trans import boolean_operation, transform_operation
 from utils.export import export_mesh
 from utils.timer import timer
+from src.solver.forward_dynamics import forward_dynamics_step
 
 
 def main():
-    params = load_config('SimParams_1')
+    params = load_config('SimParams_2')
 
     # 齿轮参数
     rotation_speed = np.float64(params.gear.rotation_speed)

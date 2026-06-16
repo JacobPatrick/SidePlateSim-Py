@@ -70,9 +70,7 @@ def load_geometry_from_dxf(
             lines.append(LineString([start, end]))
         elif etype == "CIRCLE":
             center = (entity.dxf.center.x, entity.dxf.center.y)
-            pts = _sample_arc(
-                center, entity.dxf.radius, 0.0, 2 * np.pi, arc_samples
-            )
+            pts = _sample_arc(center, entity.dxf.radius, 0.0, 2 * np.pi, arc_samples)
             if pts[0] != pts[-1]:
                 pts.append(pts[0])
             lines.append(LineString(pts))
@@ -82,9 +80,7 @@ def load_geometry_from_dxf(
             end = np.radians(entity.dxf.end_angle)
             if end < start:
                 end += 2 * np.pi
-            pts = _sample_arc(
-                center, entity.dxf.radius, start, end, arc_samples
-            )
+            pts = _sample_arc(center, entity.dxf.radius, start, end, arc_samples)
             if len(pts) >= 2:
                 lines.append(LineString(pts))
 
@@ -93,8 +89,7 @@ def load_geometry_from_dxf(
 
     if simplify_tolerance > 0.0:
         lines = [
-            line.simplify(simplify_tolerance, preserve_topology=True)
-            for line in lines
+            line.simplify(simplify_tolerance, preserve_topology=True) for line in lines
         ]
     if snap_tolerance > 0.0:
         reference = MultiLineString(lines)
@@ -103,9 +98,7 @@ def load_geometry_from_dxf(
     merged = unary_union(lines)
     polys = list(polygonize(merged))
     polys = [
-        transform_operation(
-            poly, transform="scale", scale_param=(0.001, (0, 0))
-        )
+        transform_operation(poly, transform="scale", scale_param=(0.001, (0, 0)))
         for poly in polys
     ]
     if not polys:
@@ -136,9 +129,7 @@ def load_gear_profile_from_dxf(
             center = (entity.dxf.center.x, entity.dxf.center.y)
             radius = float(entity.dxf.radius)
             circle_polys.append(
-                Point(center[0], center[1]).buffer(
-                    radius, resolution=arc_samples
-                )
+                Point(center[0], center[1]).buffer(radius, resolution=arc_samples)
             )
             continue
         try:
@@ -168,9 +159,7 @@ def load_gear_profile_from_dxf(
             end = np.radians(entity.dxf.end_angle)
             if end < start:
                 end += 2 * np.pi
-            pts = _sample_arc(
-                center, entity.dxf.radius, start, end, arc_samples
-            )
+            pts = _sample_arc(center, entity.dxf.radius, start, end, arc_samples)
             if len(pts) >= 2:
                 lines.append(LineString(pts))
 
