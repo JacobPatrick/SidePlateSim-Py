@@ -78,7 +78,7 @@ def main():
     p = case.solve()
     F, (i, j) = case.calc_force(p)
 
-    plot_pressure_distribution(mesh, p, fig_name="pressure_distribution", mode="save")
+    plot_pressure_distribution(mesh, p, fig_name="pressure_distribution", contour="Only", mode="save")
     print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 
 

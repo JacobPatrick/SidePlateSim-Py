@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 from matplotlib import tri as mtri
 from matplotlib import cm, colors
 from datetime import datetime
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 def plot_shapely_poly(poly, fig_name, mode="save"):
@@ -44,7 +45,7 @@ def plot_mesh(mesh, fig_name, mode="save"):
     points = np.array(mesh.points)
     elements = np.array(mesh.elements)
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    _, ax = plt.subplots(figsize=(6, 6))
     ax.triplot(points[:, 0], points[:, 1], elements, "b-", lw=0.5)
     ax.plot(points[:, 0], points[:, 1], "ro", markersize=3, alpha=0.5)
 
@@ -69,27 +70,48 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
     centroids = np.mean(points[elements], axis=1)
 
     _, ax = plt.subplots(figsize=(6, 6))
-    x_lst = [points[i][0] for i in range(len(points))]
-    y_lst = [points[i][1] for i in range(len(points))]
-    triang = mtri.Triangulation(x_lst, y_lst, triangles=elements)
-    c = ax.tripcolor(triang, facecolors=p_cells, cmap="jet", shading="flat")
-    c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
-    ax.set_aspect("equal")
-    plt.colorbar(c, ax=ax, label="Pressure [Pa]")
+    x = points[:, 0]
+    y = points[:, 1]
+    triang = mtri.Triangulation(x, y, triangles=elements)
+    
+    if contour == "Only":
+        ax.triplot(x, y, elements, color="white", lw=0.5)
 
-    if contour == "True":
         cx = centroids[:, 0]
         cy = centroids[:, 1]
-
-        # 将单元中心点坐标与压力值配对，绘制等高线
-        ax.tricontour(
-            cx, cy, p_cells, levels=10, colors="black", linewidths=0.5, alpha=0.5
+        cs = ax.tricontour(
+            cx, cy, p_cells, levels=8, cmap="jet", linewidths=0.8
         )
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
+        
+        for facet in mesh.facets:
+            facet_points = np.array([mesh.points[i] for i in facet])
+            ax.plot(facet_points[:, 0], facet_points[:, 1], color="black", lw=0.8)
+    else:
+        c = ax.tripcolor(triang, facecolors=p_cells, cmap="jet", shading="flat")
+        c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(c, cax=cax, label="Pressure [Pa]")
 
+        if contour == "True":
+            cx = centroids[:, 0]
+            cy = centroids[:, 1]
+            ax.tricontour(
+                cx, cy, p_cells, levels=10, colors="black", linewidths=0.8, alpha=0.5
+            )
+
+    ax.set_aspect("equal")
     if mode == "save":
+        fig = ax.get_figure()
+        fig.subplots_adjust(right=0.88)
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
             dpi=300,
+            bbox_inches='tight',
+            pad_inches=0.02,
         )
     elif mode == "show":
         plt.show()
@@ -97,7 +119,7 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
 
 
 def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
-    _, ax = plt.subplots(figsize=(7, 6))
+    fig, ax = plt.subplots(figsize=(7, 6))
     facets = np.array(mesh.facets)
 
     vmin = float(np.min(leak_rate))
@@ -117,11 +139,17 @@ def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
 
     sm = cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
-    plt.colorbar(sm, ax=ax, label="Leak Rate [m^3/s]")
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.05)
+    plt.colorbar(sm, cax=cax, label="Leak Rate [m^3/s]")
     if mode == "save":
+        fig = ax.get_figure()
+        fig.subplots_adjust(right=0.88)
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
             dpi=300,
+            bbox_inches='tight',
+            pad_inches=0.02,
         )
     elif mode == "show":
         plt.show()
