@@ -1,11 +1,18 @@
 import numpy as np
-from interface.type import GearProfileDir, SidePlateState, FilmParam
+from interface.type import (
+    GearProfileDir,
+    SidePlateState,
+    FilmParam,
+)
 from utils.math_tools import quaternion_to_euler
 from utils.load_geometry import (
     load_geometry_from_dxf,
     load_gear_profile_from_dxf,
 )
-from utils.geo_trans import boolean_operation, transform_operation
+from utils.geo_trans import (
+    boolean_operation,
+    transform_operation,
+)
 from src.geometry.mesher import shapely_to_meshpy
 
 
@@ -20,7 +27,9 @@ class MeshGenerator:
 
     def solve(self, t, p_lst, status: SidePlateState):
         # 1. 导入齿轮轮廓
-        gear_poly = load_gear_profile_from_dxf(self.gear_profile_dir.gear_poly_dir)
+        gear_poly = load_gear_profile_from_dxf(
+            self.gear_profile_dir.gear_poly_dir
+        )
 
         # 油膜区域随齿轮旋转而变化
         deg = (t * self.omega * 180 / np.pi) % 30  # 12 齿齿轮
@@ -30,8 +39,12 @@ class MeshGenerator:
             transform="rotate",
             rotate_param=(np.radians(deg), (0, 0)),
         )
-        relief_poly = load_geometry_from_dxf(self.gear_profile_dir.relief_poly_dir)
-        film_poly = boolean_operation(rotated, relief_poly, operation="difference")
+        relief_poly = load_geometry_from_dxf(
+            self.gear_profile_dir.relief_poly_dir
+        )
+        film_poly = boolean_operation(
+            rotated, relief_poly, operation="difference"
+        )
         # 2. 划分网格
         mesh = shapely_to_meshpy(film_poly, max_area=1e-7, markers=p_lst)
 
@@ -47,7 +60,9 @@ class MeshGenerator:
             + status.p[2] * np.ones(len(centroids))
         )
         # 非负检查
-        assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
+        assert np.any(
+            h_cells > 0
+        ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
         # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
         h_grad = (-np.sin(pitch), np.sin(roll))
 
@@ -57,7 +72,9 @@ class MeshGenerator:
             bc_lst.append(p_val)
 
         # 3.3 计算三角网格中心处的相对运动速度
-        U_cells = np.array([[-self.omega * p[1], self.omega * p[0]] for p in centroids])
+        U_cells = np.array(
+            [[-self.omega * p[1], self.omega * p[0]] for p in centroids]
+        )
 
         # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
         ht_cells = (

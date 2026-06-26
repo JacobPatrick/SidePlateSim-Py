@@ -5,7 +5,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
 from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import plot_pressure_distribution
+from src.postproc.visualize import (
+    plot_pressure_distribution,
+)
 from src.geometry.mesher import shapely_to_meshpy
 from solver.reynolds import ReynoldsSolver
 from src.config.config import load_config
@@ -47,7 +49,9 @@ def main():
         + status_vec[0] * np.ones(len(centroids))
     )
     # 非负检查
-    assert np.any(h_cells > 0), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
+    assert np.any(
+        h_cells > 0
+    ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
     # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
     h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
 
@@ -62,8 +66,12 @@ def main():
     # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
     ht_cells = (
         status_vec[1] * np.ones(len(centroids))
-        + np.cos(status_vec[2]) * status_vec[3] * np.array([p[1] for p in centroids])
-        - np.cos(status_vec[4]) * status_vec[5] * np.array([p[0] for p in centroids])
+        + np.cos(status_vec[2])
+        * status_vec[3]
+        * np.array([p[1] for p in centroids])
+        - np.cos(status_vec[4])
+        * status_vec[5]
+        * np.array([p[0] for p in centroids])
     )
 
     case = ReynoldsSolver(
@@ -79,7 +87,11 @@ def main():
     F, (i, j) = case.calc_force(p)
 
     plot_pressure_distribution(
-        mesh, p, fig_name="pressure_distribution", contour="Only", mode="save"
+        mesh,
+        p,
+        fig_name="pressure_distribution",
+        contour="Only",
+        mode="save",
     )
     print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
 

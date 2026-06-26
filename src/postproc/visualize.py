@@ -47,7 +47,13 @@ def plot_mesh(mesh, fig_name, mode="save"):
 
     _, ax = plt.subplots(figsize=(6, 6))
     ax.triplot(points[:, 0], points[:, 1], elements, "b-", lw=0.5)
-    ax.plot(points[:, 0], points[:, 1], "ro", markersize=3, alpha=0.5)
+    ax.plot(
+        points[:, 0],
+        points[:, 1],
+        "ro",
+        markersize=3,
+        alpha=0.5,
+    )
 
     ax.set_aspect("equal")
     ax.grid(True, alpha=0.3)
@@ -64,7 +70,9 @@ def plot_mesh(mesh, fig_name, mode="save"):
     plt.close()
 
 
-def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="save"):
+def plot_pressure_distribution(
+    mesh, p_cells, fig_name, contour="True", mode="save"
+):
     points = np.array(mesh.points)
     elements = np.array(mesh.elements)
     centroids = np.mean(points[elements], axis=1)
@@ -79,16 +87,33 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
 
         cx = centroids[:, 0]
         cy = centroids[:, 1]
-        cs = ax.tricontour(cx, cy, p_cells, levels=8, cmap="jet", linewidths=0.8)
+        cs = ax.tricontour(
+            cx,
+            cy,
+            p_cells,
+            levels=8,
+            cmap="jet",
+            linewidths=0.8,
+        )
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
         plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
 
         for facet in mesh.facets:
             facet_points = np.array([mesh.points[i] for i in facet])
-            ax.plot(facet_points[:, 0], facet_points[:, 1], color="black", lw=0.8)
+            ax.plot(
+                facet_points[:, 0],
+                facet_points[:, 1],
+                color="black",
+                lw=0.8,
+            )
     else:
-        c = ax.tripcolor(triang, facecolors=p_cells, cmap="jet", shading="flat")
+        c = ax.tripcolor(
+            triang,
+            facecolors=p_cells,
+            cmap="jet",
+            shading="flat",
+        )
         c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
@@ -98,7 +123,13 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
             cx = centroids[:, 0]
             cy = centroids[:, 1]
             ax.tricontour(
-                cx, cy, p_cells, levels=10, colors="black", linewidths=0.8, alpha=0.5
+                cx,
+                cy,
+                p_cells,
+                levels=10,
+                colors="black",
+                linewidths=0.8,
+                alpha=0.5,
             )
 
     ax.set_aspect("equal")
@@ -123,7 +154,10 @@ def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
     vmin = float(np.min(leak_rate))
     vmax = float(np.max(leak_rate))
     abs_max = max(abs(vmin), abs(vmax))
-    vmin, vmax = -abs_max, abs_max  # 设置对称的 colorbar 范围
+    vmin, vmax = (
+        -abs_max,
+        abs_max,
+    )  # 设置对称的 colorbar 范围
     if vmin == vmax:
         vmax = vmin + 1.0
     norm = colors.Normalize(vmin=vmin, vmax=vmax)

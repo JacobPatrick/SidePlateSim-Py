@@ -1,8 +1,11 @@
 import numpy as np
 <<<<<<< HEAD
+<<<<<<< HEAD
 from interface.types import FilmParam, FluidProp, Pressure
 =======
 from dataclasses import dataclass
+=======
+>>>>>>> 75042e8 ((chores) reformatted the code)
 from interface.type import FilmParam, FluidProp, Pressure
 >>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
 from meshpy.triangle import MeshInfo

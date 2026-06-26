@@ -1,6 +1,9 @@
 import numpy as np
-from dataclasses import dataclass
-from interface.type import SidePlateState, SidePlateMassProp, ForceTorque
+from interface.type import (
+    SidePlateState,
+    SidePlateMassProp,
+    ForceTorque,
+)
 from utils.math_tools import quaternion_multiply
 
 
@@ -11,7 +14,11 @@ class ForwardDynamicsSolver:
         self.Ic = physics_param.Ic
         self.g_vec = physics_param.g_vec
 
-    def solve(self, state: SidePlateState, force_torque: ForceTorque) -> SidePlateState:
+    def solve(
+        self,
+        state: SidePlateState,
+        force_torque: ForceTorque,
+    ) -> SidePlateState:
         """
         单步正向动力学求解
         Params:
