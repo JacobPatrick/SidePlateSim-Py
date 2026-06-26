@@ -1,5 +1,10 @@
 import numpy as np
+<<<<<<< HEAD
 from interface.types import FilmParam, FluidProp, Pressure
+=======
+from dataclasses import dataclass
+from interface.type import FilmParam, FluidProp, Pressure
+>>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
@@ -11,6 +16,7 @@ class ReynoldsSolver:
     默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
+<<<<<<< HEAD
     def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
         self.mu = fluid_prop.mu
@@ -18,6 +24,35 @@ class ReynoldsSolver:
         self.equ = ()
 
     def _assemble_reynolds_fvm(self, film_param: FilmParam):
+=======
+    def __init__(
+        self,
+        mesh: MeshInfo,
+        fluid_prop: FluidProp,
+        film_param: FilmParam,
+    ):
+        """
+        Args:
+            mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
+            h_cells: 网格单元处的油膜厚度 (N,) [m]
+            mu: 动力粘度 [Pa·s]
+            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
+            ht_cells: 挤压速度场 (N,) [m/s]
+            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
+        """
+        self.mesh = mesh
+        self.h_cells = film_param.h_cells
+        self.mu = fluid_prop.mu
+        self.U_cells = film_param.U_cells
+        self.ht_cells = film_param.ht_cells
+        self.h_grad = film_param.h_grad
+        self.bc_lst = film_param.bc_lst
+
+        self.equ = ()
+        self._assemble_reynolds_fvm()
+
+    def _assemble_reynolds_fvm(self):
+>>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
         """
         组装 2D Reynolds 方程的稀疏矩阵与右端项
         """
@@ -140,6 +175,7 @@ class ReynoldsSolver:
 
         self.equ = (A.tocsr(), b)
 
+<<<<<<< HEAD
     def solve(self, film_param: FilmParam):
         """
         1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
@@ -173,6 +209,8 @@ class ReynoldsSolver:
 
         return Pressure(p=p, F=F, center=center)
 
+=======
+>>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
     def _calc_force(self, p):
         """
         根据压力分布求油膜压力
@@ -193,7 +231,21 @@ class ReynoldsSolver:
 
         return F, center
 
+<<<<<<< HEAD
     def _calc_flow(self, p, film_param: FilmParam):
+=======
+    def solve(self):
+        """
+        1. 求解线性系统 A * x = b，返回压力分布 p
+        2. 计算油膜压力 F 和作用点坐标 (i, j)
+        """
+        p = spsolve(self.equ[0], self.equ[1])
+        F, center = self._calc_force(p)
+
+        return Pressure(p=p, F=F, center=center)
+
+    def _calc_flow(self, p):
+>>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
         """
         根据压力场求流速场
         """

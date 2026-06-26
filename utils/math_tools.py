@@ -33,3 +33,33 @@ def quaternion_multiply(q1, q2):
     y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
     z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
     return np.array([w, x, y, z])
+
+
+def quaternion_to_euler(w, x, y, z):
+    """
+    将四元数转换为 Z-Y-X 顺序的欧拉角 (Roll, Pitch, Yaw)
+    """
+    # 1. 归一化
+    norm = np.sqrt(w * w + x * x + y * y + z * z)
+    if norm < 1e-12:
+        raise ValueError("四元数不能为零向量")
+    w, x, y, z = w / norm, x / norm, y / norm, z / norm
+
+    # 2. 计算 Roll (x-axis rotation)
+    sinr_cosp = 2.0 * (w * x + y * z)
+    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
+    roll = np.atan2(sinr_cosp, cosr_cosp)
+
+    # 3. 计算 Pitch (y-axis rotation)
+    sinp = 2.0 * (w * y - z * x)
+    if abs(sinp) >= 1.0:
+        pitch = np.copysign(np.pi / 2, sinp)
+    else:
+        pitch = np.asin(sinp)
+
+    # 4. 计算 Yaw (z-axis rotation)
+    siny_cosp = 2.0 * (w * z + x * y)
+    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+    yaw = np.atan2(siny_cosp, cosy_cosp)
+
+    return roll, pitch, yaw
