@@ -73,19 +73,17 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
     x = points[:, 0]
     y = points[:, 1]
     triang = mtri.Triangulation(x, y, triangles=elements)
-    
+
     if contour == "Only":
         ax.triplot(x, y, elements, color="white", lw=0.5)
 
         cx = centroids[:, 0]
         cy = centroids[:, 1]
-        cs = ax.tricontour(
-            cx, cy, p_cells, levels=8, cmap="jet", linewidths=0.8
-        )
+        cs = ax.tricontour(cx, cy, p_cells, levels=8, cmap="jet", linewidths=0.8)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
         plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
-        
+
         for facet in mesh.facets:
             facet_points = np.array([mesh.points[i] for i in facet])
             ax.plot(facet_points[:, 0], facet_points[:, 1], color="black", lw=0.8)
@@ -110,7 +108,7 @@ def plot_pressure_distribution(mesh, p_cells, fig_name, contour="True", mode="sa
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
             dpi=300,
-            bbox_inches='tight',
+            bbox_inches="tight",
             pad_inches=0.02,
         )
     elif mode == "show":
@@ -148,7 +146,7 @@ def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
         plt.savefig(
             f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
             dpi=300,
-            bbox_inches='tight',
+            bbox_inches="tight",
             pad_inches=0.02,
         )
     elif mode == "show":

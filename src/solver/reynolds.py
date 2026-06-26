@@ -1,4 +1,6 @@
 import numpy as np
+from dataclasses import dataclass
+from interface.type import FilmParam, FluidProp, Pressure
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
@@ -7,17 +9,14 @@ from scipy.sparse.linalg import spsolve
 class ReynoldsSolver:
     """
     Reynolds 方程求解器，基于单元中心有限体积法 (FVM)
+    默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
     def __init__(
         self,
         mesh: MeshInfo,
-        h_cells: np.ndarray,
-        mu: float,
-        U_cells: np.ndarray,
-        ht_cells: np.ndarray,
-        h_grad: tuple,
-        bc_lst: list = [],
+        fluid_prop: FluidProp,
+        film_param: FilmParam,
     ):
         """
         Args:
@@ -29,17 +28,17 @@ class ReynoldsSolver:
             bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
         """
         self.mesh = mesh
-        self.h_cells = h_cells
-        self.mu = mu
-        self.U_cells = U_cells
-        self.ht_cells = ht_cells
-        self.h_grad = h_grad
-        self.bc_lst = bc_lst
+        self.h_cells = film_param.h_cells
+        self.mu = fluid_prop.mu
+        self.U_cells = film_param.U_cells
+        self.ht_cells = film_param.ht_cells
+        self.h_grad = film_param.h_grad
+        self.bc_lst = film_param.bc_lst
 
         self.equ = ()
-        self.assemble_reynolds_fvm()
+        self._assemble_reynolds_fvm()
 
-    def assemble_reynolds_fvm(self):
+    def _assemble_reynolds_fvm(self):
         """
         组装 2D Reynolds 方程的稀疏矩阵与右端项
         """
@@ -154,15 +153,7 @@ class ReynoldsSolver:
 
         self.equ = (A.tocsr(), b)
 
-    def solve(self):
-        """
-        求解线性系统 A * x = b，返回压力分布 p
-        """
-        p = spsolve(self.equ[0], self.equ[1])
-
-        return p
-
-    def calc_force(self, p):
+    def _calc_force(self, p):
         """
         根据压力分布求油膜压力
         """
@@ -181,7 +172,17 @@ class ReynoldsSolver:
 
         return F, (i, j)
 
-    def calc_flow(self, p):
+    def solve(self):
+        """
+        1. 求解线性系统 A * x = b，返回压力分布 p
+        2. 计算油膜压力 F 和作用点坐标 (i, j)
+        """
+        p = spsolve(self.equ[0], self.equ[1])
+        F, center = self._calc_force(p)
+
+        return Pressure(p=p, F=F, center=center)
+
+    def _calc_flow(self, p):
         """
         根据压力场求流速场
         """
@@ -311,7 +312,7 @@ class ReynoldsSolver:
                     }
                 )
 
-        local_u, local_v = self.calc_flow(p)
+        local_u, local_v = self._calc_flow(p)
 
         leak_rate = []
 
