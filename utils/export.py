@@ -1,7 +1,11 @@
 from meshpy.triangle import MeshInfo, write_gnuplot_mesh
 
 
-def export_mesh(mesh: MeshInfo, filename: str, dir: str = "results/mesh/"):
+def export_mesh(
+    mesh: MeshInfo,
+    filename: str,
+    dir: str = "results/mesh/",
+):
     """将网格几何信息导出为 .dat 文本文件"""
     try:
         write_gnuplot_mesh(dir + filename + ".dat", mesh)

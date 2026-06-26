@@ -31,7 +31,11 @@ def transform_operation(
         raise TypeError("输入轮廓类型必须是 Polygon 或 MultiPolygon")
     # 平移
     if transform == "translate":
-        return translate(profile, xoff=translate_param[0], yoff=translate_param[1])
+        return translate(
+            profile,
+            xoff=translate_param[0],
+            yoff=translate_param[1],
+        )
     # 缩放
     elif transform == "scale":
         profile = scale(
@@ -43,7 +47,10 @@ def transform_operation(
     # 旋转
     elif transform == "rotate":
         profile = rotate(
-            profile, rotate_param[0], origin=rotate_param[1], use_radians=True
+            profile,
+            rotate_param[0],
+            origin=rotate_param[1],
+            use_radians=True,
         )
     else:
         raise ValueError("不支持的变换类型")

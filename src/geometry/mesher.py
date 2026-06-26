@@ -46,7 +46,10 @@ def _clean_single_loop(coords, min_edge_length=1e-5, resample_factor=1.0):
         line = LineString(coords)
         if line.length < 1e-12:
             return coords
-        n_new = max(12, int(line.length / (resample_factor * min_edge_length)))
+        n_new = max(
+            12,
+            int(line.length / (resample_factor * min_edge_length)),
+        )
         coords = np.array(
             [
                 line.interpolate(i / (n_new - 1), normalized=True).coords[0]
@@ -131,7 +134,9 @@ def shapely_to_meshpy(
         num_splits = len(splits)
         for i in range(num_splits):
             s_idx, marker = splits[i]
-            e_idx = splits[(i + 1) % num_splits][0]  # 总是选择下一个点，实现闭环
+            e_idx = splits[(i + 1) % num_splits][
+                0
+            ]  # 总是选择下一个点，实现闭环
 
             # 仅有一个分段点时，起点终点重合，无需标记区间
             if s_idx == e_idx:

@@ -14,7 +14,12 @@ class InvoluteGear:
     """生成渐开线齿轮"""
 
     def __init__(
-        self, module, teeth_num, inner_radius, thickness=5e-2, pressure_angle=20
+        self,
+        module,
+        teeth_num,
+        inner_radius,
+        thickness=5e-2,
+        pressure_angle=20,
     ):
         self.module = module * 1e-3
         self.teeth_num = teeth_num
@@ -50,28 +55,32 @@ class InvoluteGear:
                 [
                     -(
                         0.5 * tooth_width
-                        + self.addendum * np.tan(np.radians(self.pressure_angle))
+                        + self.addendum
+                        * np.tan(np.radians(self.pressure_angle))
                     ),
                     self.addendum,
                 ],
                 [
                     -(
                         0.5 * tooth_width
-                        - self.dedendum * np.tan(np.radians(self.pressure_angle))
+                        - self.dedendum
+                        * np.tan(np.radians(self.pressure_angle))
                     ),
                     -self.dedendum,
                 ],
                 [
                     (
                         0.5 * tooth_width
-                        - self.dedendum * np.tan(np.radians(self.pressure_angle))
+                        - self.dedendum
+                        * np.tan(np.radians(self.pressure_angle))
                     ),
                     -self.dedendum,
                 ],
                 [
                     (
                         0.5 * tooth_width
-                        + self.addendum * np.tan(np.radians(self.pressure_angle))
+                        + self.addendum
+                        * np.tan(np.radians(self.pressure_angle))
                     ),
                     self.addendum,
                 ],
@@ -86,7 +95,10 @@ class InvoluteGear:
 
         for theta in np.linspace(0, _l, frame_count):
             # 刀具平移 + 工件旋转（模拟纯滚动切削）
-            X = rotation(profile + np.array([-theta * self.r_p, self.r_p]), theta)
+            X = rotation(
+                profile + np.array([-theta * self.r_p, self.r_p]),
+                theta,
+            )
             if prev_X is not None:
                 # 用相邻两帧的顶点构造凸包，填补离散间隙
                 pts = np.vstack([X, prev_X])
@@ -125,7 +137,9 @@ class InvoluteGear:
         # 2. 构造扇区多边形（含圆心）
         n_arc = 120
         angles = np.linspace(start_angle, end_angle, n_arc)
-        sector_pts = [(self.r_a * np.cos(a), self.r_a * np.sin(a)) for a in angles]
+        sector_pts = [
+            (self.r_a * np.cos(a), self.r_a * np.sin(a)) for a in angles
+        ]
         sector_pts.append((0.0, 0.0))  # 闭合至圆心，自然形成两条径向直边
         sector = Polygon(sector_pts)
 
@@ -136,6 +150,8 @@ class InvoluteGear:
         if tooth_poly.geom_type == "MultiPolygon":
             tooth_poly = max(tooth_poly.geoms, key=lambda p: p.area)
         elif tooth_poly.is_empty:
-            raise ValueError("扇区与齿轮无交集，请检查 angle_offset 或 teeth_count")
+            raise ValueError(
+                "扇区与齿轮无交集，请检查 angle_offset 或 teeth_count"
+            )
 
         return tooth_poly, gear_poly

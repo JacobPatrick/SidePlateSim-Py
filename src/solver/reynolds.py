@@ -1,5 +1,4 @@
 import numpy as np
-from dataclasses import dataclass
 from interface.type import FilmParam, FluidProp, Pressure
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
@@ -70,7 +69,13 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
+                    faces.append(
+                        {
+                            "cells": (j, i),
+                            "nodes": key,
+                            "marker": 0,
+                        }
+                    )
                 else:
                     edge_to_cell[key] = i
 
@@ -294,7 +299,13 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
+                    faces.append(
+                        {
+                            "cells": (j, i),
+                            "nodes": key,
+                            "marker": 0,
+                        }
+                    )
                 else:
                     edge_to_cell[key] = i
 

@@ -12,7 +12,9 @@ class GearProfileDir:
 class SidePlateState:
     p: np.ndarray = field(default_factory=lambda: np.zeros(3))
     v: np.ndarray = field(default_factory=lambda: np.zeros(3))
-    q: np.ndarray = field(default_factory=lambda: np.array([1.0, 0.0, 0.0, 0.0]))
+    q: np.ndarray = field(
+        default_factory=lambda: np.array([1.0, 0.0, 0.0, 0.0])
+    )
     w: np.ndarray = field(default_factory=lambda: np.zeros(3))
 
 
@@ -42,7 +44,9 @@ class SidePlateMassProp:
     m: float
     Ic: np.ndarray
     barycenter: np.ndarray
-    g_vec: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, -9.81]))
+    g_vec: np.ndarray = field(
+        default_factory=lambda: np.array([0.0, 0.0, -9.81])
+    )
 
 
 @dataclass

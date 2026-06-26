@@ -46,7 +46,9 @@ class SimulationConfig:
     iteration: IterationParameters
 
     @staticmethod
-    def load_from_yaml(file_path: str) -> "SimulationConfig":
+    def load_from_yaml(
+        file_path: str,
+    ) -> "SimulationConfig":
         with open(file_path, "r") as f:
             data = yaml.safe_load(f)
 
