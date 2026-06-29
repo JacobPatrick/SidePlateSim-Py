@@ -44,7 +44,7 @@ def transform_operation(
             yfact=scale_param[0],
             origin=scale_param[1],
         )
-    # 旋转
+    # 旋转，逆时针为负，顺时针为正
     elif transform == "rotate":
         profile = rotate(
             profile,

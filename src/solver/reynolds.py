@@ -35,7 +35,6 @@ class ReynoldsSolver:
         self.bc_lst = film_param.bc_lst
 
         self.equ = ()
-        self._assemble_reynolds_fvm()
 
     def _assemble_reynolds_fvm(self):
         """
@@ -158,6 +157,17 @@ class ReynoldsSolver:
 
         self.equ = (A.tocsr(), b)
 
+    def solve(self):
+        """
+        1. 求解线性系统 A * x = b，返回压力分布 p
+        2. 计算油膜压力 F 和作用点坐标 (i, j)
+        """
+        self._assemble_reynolds_fvm()
+        p = spsolve(self.equ[0], self.equ[1])
+        F, center = self._calc_force(p)
+
+        return Pressure(p=p, F=F, center=center)
+
     def _calc_force(self, p):
         """
         根据压力分布求油膜压力
@@ -176,16 +186,6 @@ class ReynoldsSolver:
         j = np.sum(p * centroids[:, 1] * areas) / F
 
         return F, (i, j)
-
-    def solve(self):
-        """
-        1. 求解线性系统 A * x = b，返回压力分布 p
-        2. 计算油膜压力 F 和作用点坐标 (i, j)
-        """
-        p = spsolve(self.equ[0], self.equ[1])
-        F, center = self._calc_force(p)
-
-        return Pressure(p=p, F=F, center=center)
 
     def _calc_flow(self, p):
         """
