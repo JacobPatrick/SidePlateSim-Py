@@ -15,15 +15,24 @@ from utils.geo_trans import (
 )
 from src.geometry.mesher import shapely_to_meshpy
 
+DRIVE_GEAR_CENTER = (0.0305, 0)
+SLAVE_GEAR_CENTER = (-0.0305, 0)
+
 
 class MeshGenerator:
     def __init__(
         self,
         gear_profile_dir: GearProfileDir,
         omega: float,
+        gear_type: str = "drive" | "slave",
     ):
         self.gear_profile_dir = gear_profile_dir
         self.omega = omega
+        assert gear_type in [
+            "drive",
+            "slave",
+        ], "警告: 齿轮类型必须是 'drive' 或 'slave'"
+        self.gear_type = gear_type
 
     def solve(self, t, p_lst, status: SidePlateState):
         # 1. 导入齿轮轮廓
@@ -34,11 +43,33 @@ class MeshGenerator:
         # 油膜区域随齿轮旋转而变化
         deg = (t * self.omega * 180 / np.pi) % 30  # 12 齿齿轮
         roll, pitch, _ = quaternion_to_euler(*status.q)
-        rotated = transform_operation(
-            gear_poly,
-            transform="rotate",
-            rotate_param=(np.radians(deg), (0, 0)),
-        )
+        if self.gear_type == "drive":
+            # 主动轮逆时针旋转，齿轮轴心在原点，偏移到 DRIVE_GEAR_CENTER
+            translated = transform_operation(
+                gear_poly,
+                transform="translate",
+                translate_param=(DRIVE_GEAR_CENTER[0], DRIVE_GEAR_CENTER[1]),
+            )
+            rotated = transform_operation(
+                translated,
+                transform="rotate",
+                rotate_param=(np.radians(-deg), DRIVE_GEAR_CENTER),
+            )
+        else:
+            # 从动轮顺时针旋转，齿轮轴心在 (-0.061, 0)，偏移到 SLAVE_GEAR_CENTER
+            translated = transform_operation(
+                gear_poly,
+                transform="translate",
+                translate_param=(
+                    SLAVE_GEAR_CENTER[0] + 0.061,
+                    SLAVE_GEAR_CENTER[1],
+                ),
+            )
+            rotated = transform_operation(
+                translated,
+                transform="rotate",
+                rotate_param=(np.radians(deg), SLAVE_GEAR_CENTER),
+            )
         relief_poly = load_geometry_from_dxf(
             self.gear_profile_dir.relief_poly_dir
         )
@@ -55,8 +86,8 @@ class MeshGenerator:
 
         # 3.1 计算节点处的油膜厚度
         h_cells = (
-            -np.sin(pitch) * np.array([p[0] for p in centroids])
-            + np.sin(roll) * np.array([p[1] for p in centroids])
+            -np.sin(pitch) * np.array([point[0] for point in centroids])
+            + np.sin(roll) * np.array([point[1] for point in centroids])
             + status.p[2] * np.ones(len(centroids))
         )
         # 非负检查
@@ -72,15 +103,36 @@ class MeshGenerator:
             bc_lst.append(p_val)
 
         # 3.3 计算三角网格中心处的相对运动速度
-        U_cells = np.array(
-            [[-self.omega * p[1], self.omega * p[0]] for p in centroids]
-        )
+        if self.gear_type == "drive":
+            U_cells = np.array(
+                [
+                    [
+                        -self.omega * point[1],
+                        self.omega * (point[0] - DRIVE_GEAR_CENTER[0]),
+                    ]
+                    for point in centroids
+                ]
+            )
+        else:
+            U_cells = np.array(
+                [
+                    [
+                        self.omega * point[1],
+                        -self.omega * (point[0] - SLAVE_GEAR_CENTER[0]),
+                    ]
+                    for point in centroids
+                ]
+            )
 
         # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
         ht_cells = (
             status.v[2] * np.ones(len(centroids))
-            + np.cos(roll) * status.w[0] * np.array([p[1] for p in centroids])
-            - np.cos(pitch) * status.w[1] * np.array([p[0] for p in centroids])
+            + np.cos(roll)
+            * status.w[0]
+            * np.array([point[1] for point in centroids])
+            - np.cos(pitch)
+            * status.w[1]
+            * np.array([point[0] for point in centroids])
         )
 
         return mesh, FilmParam(

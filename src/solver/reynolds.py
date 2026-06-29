@@ -52,7 +52,6 @@ class ReynoldsSolver:
         self.bc_lst = film_param.bc_lst
 
         self.equ = ()
-        self._assemble_reynolds_fvm()
 
     def _assemble_reynolds_fvm(self):
 >>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
@@ -179,6 +178,7 @@ class ReynoldsSolver:
         self.equ = (A.tocsr(), b)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def solve(self, film_param: FilmParam):
         """
         1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
@@ -214,6 +214,19 @@ class ReynoldsSolver:
 
 =======
 >>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
+=======
+    def solve(self):
+        """
+        1. 求解线性系统 A * x = b，返回压力分布 p
+        2. 计算油膜压力 F 和作用点坐标 (i, j)
+        """
+        self._assemble_reynolds_fvm()
+        p = spsolve(self.equ[0], self.equ[1])
+        F, center = self._calc_force(p)
+
+        return Pressure(p=p, F=F, center=center)
+
+>>>>>>> 44a00c0 ((feat) add the slave gear to the simulation system)
     def _calc_force(self, p):
         """
         根据压力分布求油膜压力
@@ -235,6 +248,7 @@ class ReynoldsSolver:
         return F, center
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     def _calc_flow(self, p, film_param: FilmParam):
 =======
     def solve(self):
@@ -247,6 +261,8 @@ class ReynoldsSolver:
 
         return Pressure(p=p, F=F, center=center)
 
+=======
+>>>>>>> 44a00c0 ((feat) add the slave gear to the simulation system)
     def _calc_flow(self, p):
 >>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
         """

@@ -140,7 +140,7 @@ def load_gear_profile_from_dxf(
     max_flatten_distance=0.02,
     return_inner_circle=False,
 ):
-    """从DXF文件加载几何轮廓，返回 Polygon/MultiPolygon 或标注后的轮廓"""
+    """从DXF文件加载几何轮廓，返回 Polygon/MultiPolygon 或标注后的轮廓（缩小1000倍，转化单位为m）"""
     doc = ezdxf.readfile(file_path)
     msp = doc.modelspace()
 
