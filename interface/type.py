@@ -3,9 +3,9 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class GearProfileDir:
-    gear_poly_dir: str
-    relief_poly_dir: str
+class GearProfilePath:
+    gear_poly_path: str
+    relief_poly_path: str
 
 
 @dataclass
