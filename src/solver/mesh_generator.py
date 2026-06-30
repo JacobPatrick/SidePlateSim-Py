@@ -1,6 +1,6 @@
 import numpy as np
 from interface.type import (
-    GearProfileDir,
+    GearProfilePath,
     SidePlateState,
     FilmParam,
 )
@@ -22,11 +22,11 @@ SLAVE_GEAR_CENTER = (-0.0305, 0)
 class MeshGenerator:
     def __init__(
         self,
-        gear_profile_dir: GearProfileDir,
+        gear_profile_path: GearProfilePath,
         omega: float,
-        gear_type: str = "drive" | "slave",
+        gear_type: str = "drive",
     ):
-        self.gear_profile_dir = gear_profile_dir
+        self.gear_profile_path = gear_profile_path
         self.omega = omega
         assert gear_type in [
             "drive",
@@ -37,7 +37,7 @@ class MeshGenerator:
     def solve(self, t, p_lst, status: SidePlateState):
         # 1. 导入齿轮轮廓
         gear_poly = load_gear_profile_from_dxf(
-            self.gear_profile_dir.gear_poly_dir
+            self.gear_profile_path.gear_poly_path
         )
 
         # 油膜区域随齿轮旋转而变化
@@ -70,12 +70,14 @@ class MeshGenerator:
                 transform="rotate",
                 rotate_param=(np.radians(deg), SLAVE_GEAR_CENTER),
             )
-        relief_poly = load_geometry_from_dxf(
-            self.gear_profile_dir.relief_poly_dir
-        )
-        film_poly = boolean_operation(
-            rotated, relief_poly, operation="difference"
-        )
+        # TODO: 暂时不考虑油槽区域
+        # relief_poly = load_geometry_from_dxf(
+        #     self.gear_profile_path.relief_poly_path
+        # )
+        # film_poly = boolean_operation(
+        #     rotated, relief_poly, operation="difference"
+        # )
+        film_poly = rotated
         # 2. 划分网格
         mesh = shapely_to_meshpy(film_poly, max_area=1e-7, markers=p_lst)
 
