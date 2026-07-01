@@ -63,3 +63,49 @@ def quaternion_to_euler(w, x, y, z):
     yaw = np.atan2(siny_cosp, cosy_cosp)
 
     return roll, pitch, yaw
+
+
+def euler_to_quaternion(roll, pitch, yaw):
+    """
+    将 Z-Y-X 顺序的欧拉角 (Roll, Pitch, Yaw) 转换为四元数
+    """
+    cy = np.cos(yaw * 0.5)
+    sy = np.sin(yaw * 0.5)
+    cp = np.cos(pitch * 0.5)
+    sp = np.sin(pitch * 0.5)
+    cr = np.cos(roll * 0.5)
+    sr = np.sin(roll * 0.5)
+
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+
+    return np.array([w, x, y, z])
+
+
+def quaternion_to_rotation_matrix(q):
+    """
+    将四元数转换为旋转矩阵
+    """
+    w, x, y, z = q
+    R = np.array(
+        [
+            [
+                1 - 2 * (y**2 + z**2),
+                2 * (x * y - w * z),
+                2 * (x * z + w * y),
+            ],
+            [
+                2 * (x * y + w * z),
+                1 - 2 * (x**2 + z**2),
+                2 * (y * z - w * x),
+            ],
+            [
+                2 * (x * z - w * y),
+                2 * (y * z + w * x),
+                1 - 2 * (x**2 + y**2),
+            ],
+        ]
+    )
+    return R
