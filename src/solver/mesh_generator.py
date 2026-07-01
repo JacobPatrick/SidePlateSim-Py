@@ -34,7 +34,7 @@ class MeshGenerator:
         ], "警告: 齿轮类型必须是 'drive' 或 'slave'"
         self.gear_type = gear_type
 
-    def solve(self, t, p_lst, status: SidePlateState):
+    def solve(self, t, p_lst, state: SidePlateState):
         # 1. 导入齿轮轮廓
         gear_poly = load_gear_profile_from_dxf(
             self.gear_profile_path.gear_poly_path
@@ -42,7 +42,7 @@ class MeshGenerator:
 
         # 油膜区域随齿轮旋转而变化
         deg = (t * self.omega * 180 / np.pi) % 30  # 12 齿齿轮
-        roll, pitch, _ = quaternion_to_euler(*status.q)
+        roll, pitch, _ = quaternion_to_euler(*state.q)
         if self.gear_type == "drive":
             # 主动轮逆时针旋转，齿轮轴心在原点，偏移到 DRIVE_GEAR_CENTER
             translated = transform_operation(
@@ -90,7 +90,7 @@ class MeshGenerator:
         h_cells = (
             -np.sin(pitch) * np.array([point[0] for point in centroids])
             + np.sin(roll) * np.array([point[1] for point in centroids])
-            + status.p[2] * np.ones(len(centroids))
+            + state.p[2] * np.ones(len(centroids))
         )
         # 非负检查
         assert np.any(
@@ -128,12 +128,12 @@ class MeshGenerator:
 
         # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
         ht_cells = (
-            status.v[2] * np.ones(len(centroids))
+            state.v[2] * np.ones(len(centroids))
             + np.cos(roll)
-            * status.w[0]
+            * state.w[0]
             * np.array([point[1] for point in centroids])
             - np.cos(pitch)
-            * status.w[1]
+            * state.w[1]
             * np.array([point[0] for point in centroids])
         )
 
