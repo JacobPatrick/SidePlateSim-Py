@@ -27,19 +27,19 @@ class ReynoldsSolver:
             bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
         """
         self.mesh = mesh
-        self.h_cells = film_param.h_cells
         self.mu = fluid_prop.mu
-        self.U_cells = film_param.U_cells
-        self.ht_cells = film_param.ht_cells
-        self.h_grad = film_param.h_grad
-        self.bc_lst = film_param.bc_lst
 
         self.equ = ()
 
-    def _assemble_reynolds_fvm(self):
+    def _assemble_reynolds_fvm(self, film_param: FilmParam):
         """
         组装 2D Reynolds 方程的稀疏矩阵与右端项
         """
+        h_cells = film_param.h_cells
+        U_cells = film_param.U_cells
+        ht_cells = film_param.ht_cells
+        h_grad = film_param.h_grad
+        bc_lst = film_param.bc_lst
         points = np.array(self.mesh.points)
         elements = np.array(self.mesh.elements)
         facets = np.array(self.mesh.facets)
@@ -55,7 +55,7 @@ class ReynoldsSolver:
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
         # 扩散系数 D = h^3 / (12μ)
-        D_cells = self.h_cells**3 / (12.0 * self.mu)
+        D_cells = h_cells**3 / (12.0 * self.mu)
 
         # 2. 构建面列表 (内部面 + 边界面)
         edge_to_cell = {}
@@ -99,10 +99,10 @@ class ReynoldsSolver:
         ), f"网格未闭合或 facets 不匹配，剩余 {len(edge_to_cell)} 条边"
 
         # 3. 稀疏矩阵组装
-        if not self.bc_lst:
+        if not bc_lst:
             raise ValueError("Dirichlet 边界必需，但 bc_lst 为空")
-        default_p = self.bc_lst[0]
-        bc_map = {idx: p_val for idx, p_val in enumerate(self.bc_lst)}
+        default_p = bc_lst[0]
+        bc_map = {idx: p_val for idx, p_val in enumerate(bc_lst)}
 
         A = lil_matrix((n_cells, n_cells))
         b = np.zeros(n_cells)
@@ -149,20 +149,20 @@ class ReynoldsSolver:
         # RHS
         for i in range(n_cells):
             conv = 0.5 * (
-                self.U_cells[i, 0] * self.h_grad[0]
-                + self.U_cells[i, 1] * self.h_grad[1]
+                U_cells[i, 0] * h_grad[0]
+                + U_cells[i, 1] * h_grad[1]
             )
-            ht = self.ht_cells[i]
+            ht = ht_cells[i]
             b[i] += (conv + ht) * areas[i]
 
         self.equ = (A.tocsr(), b)
 
-    def solve(self):
+    def solve(self, film_param: FilmParam):
         """
         1. 求解线性系统 A * x = b，返回压力分布 p
         2. 计算油膜压力 F 和作用点坐标 (i, j)
         """
-        self._assemble_reynolds_fvm()
+        self._assemble_reynolds_fvm(film_param)
         p = spsolve(self.equ[0], self.equ[1])
         F, center = self._calc_force(p)
 
@@ -187,7 +187,7 @@ class ReynoldsSolver:
 
         return F, (i, j)
 
-    def _calc_flow(self, p):
+    def _calc_flow(self, p, film_param: FilmParam):
         """
         根据压力场求流速场
         """
@@ -195,9 +195,11 @@ class ReynoldsSolver:
         px, py = self._calc_pressure_grediant(p)
 
         # 2. 根据压力梯度求流速
-        h2 = self.h_cells * self.h_cells
-        average_u = -(h2 * px) / (12 * self.mu) + 0.5 * self.U_cells[:, 0]
-        average_v = -(h2 * py) / (12 * self.mu) + 0.5 * self.U_cells[:, 1]
+        h_cells = film_param.h_cells
+        U_cells = film_param.U_cells
+        h2 = h_cells * h_cells
+        average_u = -(h2 * px) / (12 * self.mu) + 0.5 * U_cells[:, 0]
+        average_v = -(h2 * py) / (12 * self.mu) + 0.5 * U_cells[:, 1]
 
         return average_u, average_v
 
@@ -281,10 +283,12 @@ class ReynoldsSolver:
 
         return px, py
 
-    def calc_leakage(self, p):
+    def calc_leakage(self, p, film_param: FilmParam):
         """
         求齿槽向端面的泄漏流量
         """
+        h_cells = film_param.h_cells
+
         points = np.array(self.mesh.points)
         elements = np.array(self.mesh.elements)
         facets = np.array(self.mesh.facets)
@@ -339,7 +343,7 @@ class ReynoldsSolver:
             normal = np.array([edge_vec[1], -edge_vec[0]]) / length
 
             u_vec = np.array([local_u[i], local_v[i]])
-            flow_rate = -np.dot(u_vec, normal) * length * self.h_cells[i]
+            flow_rate = -np.dot(u_vec, normal) * length * h_cells[i]
             leak_rate.append(flow_rate)
 
         return leak_rate
