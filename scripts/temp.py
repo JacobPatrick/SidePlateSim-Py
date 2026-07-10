@@ -20,6 +20,7 @@ from src.solver.mock_LPM import MockLPM
 from src.solver.mesh_generator import MeshGenerator
 from src.solver.reynolds import ReynoldsSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
+from src.solver.strong_FSI_coupling import ExplicitFSIStabilizer
 
 
 def main():
@@ -73,7 +74,7 @@ def main():
         slave_gear_profile_path, omega, "slave"
     )
     forward_dynamics_solver = ForwardDynamicsSolver(side_plate_mass_prop)
-
+    stabilizer = ExplicitFSIStabilizer(forward_dynamics_solver)
     # 3. 迭代求解
     p_drive = None
     p_slave = None
@@ -97,14 +98,14 @@ def main():
         # 3. 求解油膜压力
         fluid_prop = FluidProp(mu=oil_mu)
         drive_reynolds_solver = ReynoldsSolver(
-            drive_mesh, fluid_prop, drive_film_param
+            drive_mesh, fluid_prop
         )
         slave_reynolds_solver = ReynoldsSolver(
-            slave_mesh, fluid_prop, slave_film_param
+            slave_mesh, fluid_prop
         )
 
-        drive_pressure = drive_reynolds_solver.solve()
-        slave_pressure = slave_reynolds_solver.solve()
+        drive_pressure = drive_reynolds_solver.solve(drive_film_param)
+        slave_pressure = slave_reynolds_solver.solve(slave_film_param)
 
         p_drive = drive_pressure.p
         p_slave = slave_pressure.p
@@ -130,7 +131,7 @@ def main():
         )
         M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
         force_torque = ForceTorque(F=F, M=M)
-        new_state = forward_dynamics_solver.solve(
+        new_state = stabilizer.stabilize(
             dt=dt, state=state, force_torque=force_torque
         )
 
@@ -150,7 +151,7 @@ def main():
         record2 = f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N"
         record3 = f"侧板受力: F={f:.2f}N"
         record4 = f"侧板状态: p={new_state.p}, v={new_state.v}, q={new_state.q}, w={new_state.w}\n"
-        with open("results/log/20260703.txt", "a") as f:
+        with open("results/log/20260707.txt", "a") as f:
             f.write(record1 + "\n")
             f.write(record2 + "\n")
             f.write(record3 + "\n")
