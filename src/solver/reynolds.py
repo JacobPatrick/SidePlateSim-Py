@@ -171,6 +171,7 @@ class ReynoldsSolver:
         # RHS
         for i in range(n_cells):
 <<<<<<< HEAD
+<<<<<<< HEAD
             conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
 =======
             conv = 0.5 * (
@@ -178,6 +179,9 @@ class ReynoldsSolver:
                 + U_cells[i, 1] * h_grad[1]
             )
 >>>>>>> 17e18fd ((refactor) decouple Reynolds solver initialization from the film parameters)
+=======
+            conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
+>>>>>>> 40c723c ((refactor) separate the function for calculating the film params)
             ht = ht_cells[i]
             b[i] += (conv + ht) * areas[i]
 

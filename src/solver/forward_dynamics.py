@@ -20,6 +20,7 @@ def _collision_detect(z, pitch, roll):
 
     return (A**2 + B**2 >= C1**2) or (A**2 + B**2 >= C2**2)
 
+
 class ForwardDynamicsSolver:
     def __init__(self, physics_param: SidePlateMassProp):
         """
@@ -95,7 +96,9 @@ class ForwardDynamicsSolver:
         # 欧拉方程: M = I * w_dot + w x (I * w)  =>  w_dot = I^-1 * (M - w x (I * w))
         Ic_w = Ic @ w
         gyroscopic_term = np.cross(w, Ic_w)
-        w_dot = (self.Ic_inv @ (force_torque.M - gyroscopic_term)) * self.rot_mask
+        w_dot = (
+            self.Ic_inv @ (force_torque.M - gyroscopic_term)
+        ) * self.rot_mask
 
         # 4. 更新平动状态
         v += a_c * dt
