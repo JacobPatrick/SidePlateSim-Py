@@ -109,3 +109,9 @@ def quaternion_to_rotation_matrix(q):
         ]
     )
     return R
+
+
+def quat_slerp(q1, q2, t):
+    """四元数简单归一化线性插值，严格可用 SLERP"""
+    q = (1 - t) * q1 + t * q2
+    return q / np.linalg.norm(q)

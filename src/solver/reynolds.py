@@ -148,10 +148,7 @@ class ReynoldsSolver:
 
         # RHS
         for i in range(n_cells):
-            conv = 0.5 * (
-                U_cells[i, 0] * h_grad[0]
-                + U_cells[i, 1] * h_grad[1]
-            )
+            conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
             ht = ht_cells[i]
             b[i] += (conv + ht) * areas[i]
 
