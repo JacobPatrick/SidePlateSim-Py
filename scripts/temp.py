@@ -36,7 +36,7 @@ def main():
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 时间步长与总时间
-    dt = np.float64(params.iteration.step_size)
+    dt = float(params.iteration.step_size)
     total_time = np.float64(params.iteration.total_time)
 
     # 侧板质量属性
@@ -50,6 +50,10 @@ def main():
 
     # 2. 初始化迭代控制器、迭代参数与求解器
     controller = AdaptiveTimeStepController()
+    dt_state = {"value": dt}
+
+    def on_dt_update(new_dt):
+        dt_state["value"] = new_dt
 
     t = 0.0
     state = SidePlateState(
@@ -75,6 +79,7 @@ def main():
         slave_gear_profile_path, omega, "slave"
     )
     forward_dynamics_solver = ForwardDynamicsSolver(side_plate_mass_prop)
+
     # 3. 迭代求解
     p_drive = None
     p_slave = None
@@ -83,10 +88,10 @@ def main():
     new_state = None
 
     while t < total_time:
-        with open("results/log/20260714_3.txt", "a") as f:
+        with open("results/log/20260714_4.txt", "a") as f:
             f.write(f"时间: {t*1000:.3f}ms\n")
-
-        dt = controller.get_dt()
+            
+        dt_state["value"] = controller.get_dt()
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
@@ -110,14 +115,11 @@ def main():
         F_slave = slave_pressure.F
         center_drive = drive_pressure.center
         center_slave = slave_pressure.center
-        
-        print(f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N")
 
         # 4. 求解正向动力学
         P_air = 1e5 * 0.0024687143080106173
         F = np.array([0, 0, F_drive + F_slave - 2 * P_air])  # TODO: 加入齿腔油压和背压
         f = F[2] - m * 9.81
-        print(f"侧板受力: F={f:.2f}N")
         M_drive = np.cross(
             side_plate_mass_prop.barycenter - [*center_drive, 0],
             [0, 0, F_drive],
@@ -138,17 +140,18 @@ def main():
             slave_reynolds_solver=slave_reynolds_solver,
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
-            max_sub_iter=20,
+            max_sub_iter=6,
             tol=1e-4,
         )
+
         new_state = single_step_fsi_solver.solve(
-            dt=dt, state_prev=state, force_torque=ForceTorque(F=F, M=M)
+            dt=dt,
+            state_prev=state,
+            force_torque=ForceTorque(F=F, M=M),
+            on_retry_callback=on_dt_update
         )
-
-        print(
-            f"时间: {t*1000:.3f}ms\n侧板状态: p={new_state.p}, v={new_state.v}, q={new_state.q}, w={new_state.w}"
-        )
-
+        dt = dt_state["value"]
+        
         side_plate_vec_z = new_state.v[2]
         side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt
         controller.compute_next_dt(
