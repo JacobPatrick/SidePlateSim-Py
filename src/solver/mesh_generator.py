@@ -41,7 +41,6 @@ class MeshGenerator:
 
         # 油膜区域随齿轮旋转而变化
         deg = (t * self.omega * 180 / np.pi) % 30  # 12 齿齿轮
-        roll, pitch, _ = quaternion_to_euler(*state.q)
         if self.gear_type == "drive":
             # 主动轮逆时针旋转，齿轮轴心在原点，偏移到 DRIVE_GEAR_CENTER
             translated = transform_operation(
