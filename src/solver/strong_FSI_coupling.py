@@ -1,28 +1,55 @@
 import numpy as np
 from interface.type import (
     SidePlateState,
-    FilmParam,
     ForceTorque,
     SidePlateMassProp,
 )
 from meshpy.triangle import MeshInfo
 from src.solver.reynolds import ReynoldsSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
-from utils.math_tools import quat_slerp
+from utils.math_tools import quaternion_multiply, quat_slerp
 from utils.calc_film_params import calc_film_params
 
 P_AIR = 1e5 * 0.0024687143080106173
 
 
-# TODO: 重写残差计算方法，特别注意数量级问题
-def _calc_residual(s1, s2):
-    t1 = np.concatenate([s1.p, s1.v, s1.q, s1.w])
-    t2 = np.concatenate([s2.p, s2.v, s2.q, s2.w])
-    residual = np.linalg.norm(t1 - t2)
-    return residual
+def _calc_res_vec(s_calc, s_pred, L_ref=1e-4, W_ref=1.0):
+    """
+    计算 FSI 子迭代的向量残差
+
+    Params:
+        s_calc: 动力学求解后计算出的状态 (t_{n+1} 的预测)
+        s_pred: 当前子迭代步的预测状态
+        L_ref: 位置的特征尺度 (例如侧板间隙量级，如 1e-4 m)
+        W_ref: 角速度的特征尺度 (例如转子角速度量级，如 1.0 rad/s)
+    """
+    # 1. 平动和转动角速度的绝对差值，并除以特征尺度进行无量纲化
+    res_p = (s_calc.p - s_pred.p) / L_ref
+    res_w = (s_calc.w - s_pred.w) / W_ref
+
+    # 2. 线速度 v 的残差
+    V_ref = L_ref * W_ref
+    res_v = (s_calc.v - s_pred.v) / V_ref
+
+    # 3. 姿态四元数 q 的残差
+    # 四元数不能直接相减，需计算误差四元数 q_err = q_calc * q_pred_inv
+    q_pred_conj = np.array(
+        [s_pred.q[0], -s_pred.q[1], -s_pred.q[2], -s_pred.q[3]]
+    )
+    q_err = quaternion_multiply(s_calc.q, q_pred_conj)
+
+    # 保证误差四元数走最短路径（实部为正）
+    if q_err[0] < 0:
+        q_err = -q_err
+
+    # 对于小角度误差，四元数的虚部近似等于旋转矢量 (Rodrigues 参数)
+    res_q = q_err[1:]
+
+    # 拼接成完整的一维向量
+    return np.concatenate([res_p, res_v, res_q, res_w])
 
 
-def _relax(self, s_old, s_new, alpha):
+def _relax(s_old: SidePlateState, s_new: SidePlateState, alpha: float):
     """线性插值松弛（保持物理量纲一致）"""
     return SidePlateState(
         p=(1 - alpha) * s_old.p + alpha * s_new.p,
@@ -65,7 +92,7 @@ class SingleStepFSISolver:
 
         # Aitken 参数历史
         self.aitken_alpha = 0.5  # 初始松弛因子
-        self.prev_residual = None
+        self.prev_res_vec = None
 
     def solve(
         self,
@@ -73,26 +100,31 @@ class SingleStepFSISolver:
         state_prev: SidePlateState,
         force_torque: ForceTorque,
     ):
-        self.prev_residual = None
+        self.prev_res_vec = None
 
         # 1. 状态预测
-        state_pred = self.dynamics_solver.solve(dt, state_prev, force_torque)
+        state_pred = SidePlateState(
+            p=state_prev.p.copy(),
+            v=state_prev.v.copy(),
+            q=state_prev.q.copy(),
+            w=state_prev.w.copy(),
+        )
 
         # 2. 内收敛循环
         num_iter = 0
-        state_calc = state_prev.copy()
+        state_calc = state_prev
         while True:
             #  2.1. 油膜求解
             drive_film_param = calc_film_params(
                 self.drive_mesh,
-                state_calc,
+                state_pred,
                 self.drive_p_lst,
                 self.omega,
                 "drive",
             )
             slave_film_param = calc_film_params(
                 self.slave_mesh,
-                state_calc,
+                state_pred,
                 self.slave_p_lst,
                 self.omega,
                 "slave",
@@ -113,12 +145,12 @@ class SingleStepFSISolver:
                 [0, 0, F_drive + F_slave - 2 * P_AIR]
             )  # TODO: 加入齿腔油压和背压
             M_drive = np.cross(
-                [0, 0, F_drive],
                 self.side_plate_mass_prop.barycenter - [*center_drive, 0],
+                [0, 0, F_drive],
             )
             M_slave = np.cross(
-                [0, 0, F_slave],
                 self.side_plate_mass_prop.barycenter - [*center_slave, 0],
+                [0, 0, F_slave],
             )
             M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
             force_torque = ForceTorque(F=F, M=M)
@@ -127,29 +159,47 @@ class SingleStepFSISolver:
             )
 
             # 2.3. 收敛判定
-            residual = _calc_residual(state_calc, state_pred)
-            if residual < self.tol:
+            res_vec = _calc_res_vec(
+                state_calc, state_pred, L_ref=1e-4, W_ref=1.0
+            )
+            res_norm = np.linalg.norm(res_vec)
+            if res_norm < self.tol:
                 state_pred = state_calc
                 break
 
             #  2.4. Aitken 松弛
-            if self.prev_residual is not None:
-                dres = residual - self.prev_residual
-                dres = np.dot(dres, dres)
-                if dres > 1e-12:
+            if self.prev_res_vec is not None:
+                dres = res_vec - self.prev_res_vec
+                dres_dot = np.dot(dres, dres)
+                if dres_dot > 1e-12:
                     self.aitken_alpha *= (
-                        -np.dot(self.prev_residual, dres) / dres
+                        -np.dot(self.prev_res_vec, dres) / dres_dot
                     )
-                    # 极薄油膜刚度极大，建议将 alpha 上界压得更低（如 0.5），防止超调发生碰撞
-                    self.aitken_alpha = np.clip(self.aitken_alpha, 0.05, 0.5)
+                    self.aitken_alpha = np.clip(self.aitken_alpha, 0.1, 0.9)
 
-            self.prev_residual = residual.copy()
+            self.prev_res_vec = res_vec.copy()
 
             state_pred = _relax(state_pred, state_calc, self.aitken_alpha)
 
             num_iter += 1
             if num_iter >= self.max_sub_iter:
-                print("警告: FSI 单步求解器在最大迭代次数内未收敛")
+                print(
+                    f"警告: FSI 单步求解器在最大迭代次数内未收敛，残差: {res_norm:.3e}"
+                )
                 break
 
+        print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
+        with open("results/log/20260714_3.txt", "a") as f:
+            f.write(
+                f"单步 FSI 求解完成，迭代次数: {num_iter}, 残差: {res_norm:.3e}\n"
+            )
+            f.write(
+                f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N\n"
+            )
+            f.write(
+                f"侧板受力: F={(F[2] - self.side_plate_mass_prop.m * 9.81):.2f}N\n"
+            )
+            f.write(
+                f"侧板状态: p={state_pred.p}, v={state_pred.v}, q={state_pred.q}, w={state_pred.w}\n\n"
+            )
         return state_pred

@@ -6,13 +6,13 @@ from interface.type import (
 )
 from utils.math_tools import quaternion_multiply, quaternion_to_euler
 
-DRIVE_GEAR_CENTER = (0.0305, 0)
-SLAVE_GEAR_CENTER = (-0.0305, 0)
-GEAR_RADIUS = 0.035
-
 
 def _collision_detect(z, pitch, roll):
     """碰撞判据: 齿顶圆上的点与侧板底部所在平面距离是否小于等于零"""
+    DRIVE_GEAR_CENTER = (0.0305, 0)
+    SLAVE_GEAR_CENTER = (-0.0305, 0)
+    GEAR_RADIUS = 0.035
+
     A = -GEAR_RADIUS * np.sin(pitch)
     B = GEAR_RADIUS * np.sin(roll)
     C1 = z - DRIVE_GEAR_CENTER[0] * np.sin(pitch)
@@ -115,7 +115,7 @@ class ForwardDynamicsSolver:
 
         # 5. 碰撞检测
         z = p[2].copy()
-        roll, pitch, _ = quaternion_to_euler(q)
+        roll, pitch, _ = quaternion_to_euler(*q)
         _entered_loop = False
         while _collision_detect(z, pitch, roll):
             _entered_loop = True

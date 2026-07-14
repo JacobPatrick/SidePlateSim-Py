@@ -20,7 +20,8 @@ from src.solver.mock_LPM import MockLPM
 from src.solver.mesh_generator import MeshGenerator
 from src.solver.reynolds import ReynoldsSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
-from src.solver.strong_FSI_coupling import ExplicitFSIStabilizer
+from src.solver.strong_FSI_coupling import SingleStepFSISolver
+from utils.calc_film_params import calc_film_params
 
 
 def main():
@@ -74,7 +75,6 @@ def main():
         slave_gear_profile_path, omega, "slave"
     )
     forward_dynamics_solver = ForwardDynamicsSolver(side_plate_mass_prop)
-    stabilizer = ExplicitFSIStabilizer(forward_dynamics_solver)
     # 3. 迭代求解
     p_drive = None
     p_slave = None
@@ -83,26 +83,23 @@ def main():
     new_state = None
 
     while t < total_time:
+        with open("results/log/20260714_3.txt", "a") as f:
+            f.write(f"时间: {t*1000:.3f}ms\n")
+
         dt = controller.get_dt()
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
         # 2. 网格划分与油膜参数求解
-        drive_mesh, drive_film_param = drive_mesh_generator.solve(
-            t=t, p_lst=drive_p_lst, state=state
-        )
-        slave_mesh, slave_film_param = slave_mesh_generator.solve(
-            t=t, p_lst=slave_p_lst, state=state
-        )
+        drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
+        slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
+        drive_film_param = calc_film_params(drive_mesh, state, drive_p_lst, omega, "drive")
+        slave_film_param = calc_film_params(slave_mesh, state, slave_p_lst, omega, "slave")
 
         # 3. 求解油膜压力
         fluid_prop = FluidProp(mu=oil_mu)
-        drive_reynolds_solver = ReynoldsSolver(
-            drive_mesh, fluid_prop
-        )
-        slave_reynolds_solver = ReynoldsSolver(
-            slave_mesh, fluid_prop
-        )
+        drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
+        slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
 
         drive_pressure = drive_reynolds_solver.solve(drive_film_param)
         slave_pressure = slave_reynolds_solver.solve(slave_film_param)
@@ -122,17 +119,30 @@ def main():
         f = F[2] - m * 9.81
         print(f"侧板受力: F={f:.2f}N")
         M_drive = np.cross(
-            [0, 0, F_drive],
             side_plate_mass_prop.barycenter - [*center_drive, 0],
+            [0, 0, F_drive],
         )
         M_slave = np.cross(
-            [0, 0, F_slave],
             side_plate_mass_prop.barycenter - [*center_slave, 0],
+            [0, 0, F_slave],
         )
         M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
-        force_torque = ForceTorque(F=F, M=M)
-        new_state = stabilizer.stabilize(
-            dt=dt, state=state, force_torque=force_torque
+
+        single_step_fsi_solver = SingleStepFSISolver(
+            drive_mesh=drive_mesh,
+            slave_mesh=slave_mesh,
+            drive_p_lst=drive_p_lst,
+            slave_p_lst=slave_p_lst,
+            omega=omega,
+            drive_reynolds_solver=drive_reynolds_solver,
+            slave_reynolds_solver=slave_reynolds_solver,
+            dynamics_solver=forward_dynamics_solver,
+            side_plate_mass_prop=side_plate_mass_prop,
+            max_sub_iter=20,
+            tol=1e-4,
+        )
+        new_state = single_step_fsi_solver.solve(
+            dt=dt, state_prev=state, force_torque=ForceTorque(F=F, M=M)
         )
 
         print(
@@ -147,16 +157,7 @@ def main():
             structural_vec=side_plate_vec_z,
             structural_acc=side_plate_acc_z,
         )
-        record1 = f"时间: {t*1000:.3f}ms"
-        record2 = f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N"
-        record3 = f"侧板受力: F={f:.2f}N"
-        record4 = f"侧板状态: p={new_state.p}, v={new_state.v}, q={new_state.q}, w={new_state.w}\n"
-        with open("results/log/20260707.txt", "a") as f:
-            f.write(record1 + "\n")
-            f.write(record2 + "\n")
-            f.write(record3 + "\n")
-            f.write(record4 + "\n")
-
+        
         state = new_state
         t += dt
 

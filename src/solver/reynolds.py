@@ -32,7 +32,6 @@ class ReynoldsSolver:
         self,
         mesh: MeshInfo,
         fluid_prop: FluidProp,
-        film_param: FilmParam,
     ):
         """
         Args:
