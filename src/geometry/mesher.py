@@ -115,8 +115,8 @@ def shapely_to_meshpy(
             nearest_idx = int(np.argmin(dists))
             splits.append((nearest_idx, int(m_id) + 1))
 
-            if dists[nearest_idx] > min_edge_length * 3:
-                print(f"警告: 标记点{m_id}：{coord}距离边界顶点过远")
+            # if dists[nearest_idx] > min_edge_length * 3:
+            #     print(f"警告: 标记点{m_id}：{coord}距离边界顶点过远")
 
         # 按边界索引排序分割点，插入标记
         splits.sort(key=lambda x: x[0])

@@ -99,107 +99,121 @@ class SingleStepFSISolver:
         dt: float,
         state_prev: SidePlateState,
         force_torque: ForceTorque,
+        on_retry_callback=None,
+        max_retries: int = 2,
     ):
-        self.prev_res_vec = None
+        current_dt = dt
+        retries = 0
+        while retries <= max_retries:
+            self.prev_res_vec = None
 
-        # 1. 状态预测
-        state_pred = SidePlateState(
-            p=state_prev.p.copy(),
-            v=state_prev.v.copy(),
-            q=state_prev.q.copy(),
-            w=state_prev.w.copy(),
-        )
-
-        # 2. 内收敛循环
-        num_iter = 0
-        state_calc = state_prev
-        while True:
-            #  2.1. 油膜求解
-            drive_film_param = calc_film_params(
-                self.drive_mesh,
-                state_pred,
-                self.drive_p_lst,
-                self.omega,
-                "drive",
-            )
-            slave_film_param = calc_film_params(
-                self.slave_mesh,
-                state_pred,
-                self.slave_p_lst,
-                self.omega,
-                "slave",
-            )
-            calc_drive_pressure = self.drive_reynolds_solver.solve(
-                drive_film_param
-            )
-            calc_slave_pressure = self.slave_reynolds_solver.solve(
-                slave_film_param
-            )
-            F_drive = calc_drive_pressure.F
-            F_slave = calc_slave_pressure.F
-            center_drive = calc_drive_pressure.center
-            center_slave = calc_slave_pressure.center
-
-            # 2.2. 动力学求解
-            F = np.array(
-                [0, 0, F_drive + F_slave - 2 * P_AIR]
-            )  # TODO: 加入齿腔油压和背压
-            M_drive = np.cross(
-                self.side_plate_mass_prop.barycenter - [*center_drive, 0],
-                [0, 0, F_drive],
-            )
-            M_slave = np.cross(
-                self.side_plate_mass_prop.barycenter - [*center_slave, 0],
-                [0, 0, F_slave],
-            )
-            M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
-            force_torque = ForceTorque(F=F, M=M)
-            state_calc = self.dynamics_solver.solve(
-                dt, state_prev, force_torque
+            # 1. 状态预测
+            state_pred = SidePlateState(
+                p=state_prev.p.copy(),
+                v=state_prev.v.copy(),
+                q=state_prev.q.copy(),
+                w=state_prev.w.copy(),
             )
 
-            # 2.3. 收敛判定
-            res_vec = _calc_res_vec(
-                state_calc, state_pred, L_ref=1e-4, W_ref=1.0
-            )
-            res_norm = np.linalg.norm(res_vec)
-            if res_norm < self.tol:
-                state_pred = state_calc
-                break
-
-            #  2.4. Aitken 松弛
-            if self.prev_res_vec is not None:
-                dres = res_vec - self.prev_res_vec
-                dres_dot = np.dot(dres, dres)
-                if dres_dot > 1e-12:
-                    self.aitken_alpha *= (
-                        -np.dot(self.prev_res_vec, dres) / dres_dot
-                    )
-                    self.aitken_alpha = np.clip(self.aitken_alpha, 0.1, 0.9)
-
-            self.prev_res_vec = res_vec.copy()
-
-            state_pred = _relax(state_pred, state_calc, self.aitken_alpha)
-
-            num_iter += 1
-            if num_iter >= self.max_sub_iter:
-                print(
-                    f"警告: FSI 单步求解器在最大迭代次数内未收敛，残差: {res_norm:.3e}"
+            # 2. 内收敛循环
+            num_iter = 0
+            state_calc = state_prev
+            while True:
+                num_iter += 1
+                #  2.1. 油膜求解
+                drive_film_param = calc_film_params(
+                    self.drive_mesh,
+                    state_pred,
+                    self.drive_p_lst,
+                    self.omega,
+                    "drive",
                 )
-                break
+                slave_film_param = calc_film_params(
+                    self.slave_mesh,
+                    state_pred,
+                    self.slave_p_lst,
+                    self.omega,
+                    "slave",
+                )
+                calc_drive_pressure = self.drive_reynolds_solver.solve(
+                    drive_film_param
+                )
+                calc_slave_pressure = self.slave_reynolds_solver.solve(
+                    slave_film_param
+                )
+                F_drive = calc_drive_pressure.F
+                F_slave = calc_slave_pressure.F
+                center_drive = calc_drive_pressure.center
+                center_slave = calc_slave_pressure.center
 
-        print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
-        with open("results/log/20260714_3.txt", "a") as f:
-            f.write(
-                f"单步 FSI 求解完成，迭代次数: {num_iter}, 残差: {res_norm:.3e}\n"
-            )
-            f.write(
-                f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N\n"
-            )
-            f.write(
-                f"侧板受力: F={(F[2] - self.side_plate_mass_prop.m * 9.81):.2f}N\n"
-            )
-            f.write(
-                f"侧板状态: p={state_pred.p}, v={state_pred.v}, q={state_pred.q}, w={state_pred.w}\n\n"
-            )
-        return state_pred
+                # 2.2. 动力学求解
+                F = np.array(
+                    [0, 0, F_drive + F_slave - 2 * P_AIR]
+                )  # TODO: 加入齿腔油压和背压
+                M_drive = np.cross(
+                    self.side_plate_mass_prop.barycenter - [*center_drive, 0],
+                    [0, 0, F_drive],
+                )
+                M_slave = np.cross(
+                    self.side_plate_mass_prop.barycenter - [*center_slave, 0],
+                    [0, 0, F_slave],
+                )
+                M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
+                force_torque = ForceTorque(F=F, M=M)
+                state_calc = self.dynamics_solver.solve(
+                    dt, state_prev, force_torque
+                )
+
+                # 2.3. 收敛判定
+                res_vec = _calc_res_vec(
+                    state_calc, state_pred, L_ref=1e-4, W_ref=1.0
+                )
+                res_norm = np.linalg.norm(res_vec)
+                if res_norm < self.tol:
+                    state_pred = state_calc
+                    print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
+                    with open("results/log/20260714_4.txt", "a") as f:
+                        f.write(
+                            f"单步 FSI 求解完成，迭代次数: {num_iter}, 残差: {res_norm:.3e}\n"
+                        )
+                        f.write(
+                            f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N\n"
+                        )
+                        f.write(
+                            f"侧板受力: F={(F[2] - self.side_plate_mass_prop.m * 9.81):.2f}N\n"
+                        )
+                        f.write(
+                            f"侧板状态: p={state_pred.p}, v={state_pred.v}, q={state_pred.q}, w={state_pred.w}\n\n"
+                        )
+                    return state_pred
+
+                #  2.4. Aitken 松弛
+                if self.prev_res_vec is not None:
+                    dres = res_vec - self.prev_res_vec
+                    dres_dot = np.dot(dres, dres)
+                    if dres_dot > 1e-12:
+                        self.aitken_alpha *= (
+                            -np.dot(self.prev_res_vec, dres) / dres_dot
+                        )
+                        self.aitken_alpha = np.clip(self.aitken_alpha, 0.1, 0.9)
+
+                self.prev_res_vec = res_vec.copy()
+
+                state_pred = _relax(state_pred, state_calc, self.aitken_alpha)
+
+                if num_iter >= self.max_sub_iter:
+                    print(
+                        f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {current_dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
+                    )
+                    # 若不收敛，通过回调函数减小步长重新迭代
+                    new_dt = current_dt * 0.5
+                    if on_retry_callback:
+                        on_retry_callback(new_dt)
+
+                    current_dt = new_dt
+                    retries += 1
+                    break
+            
+        raise RuntimeError(
+            f"FSI 单步求解器在最大重试次数 {max_retries} 内未收敛，请检查模型参数或初始条件。"
+        )
