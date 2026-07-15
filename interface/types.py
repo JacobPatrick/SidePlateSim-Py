@@ -3,28 +3,38 @@ from dataclasses import dataclass, field
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 @dataclass(frozen=True)
 =======
 @dataclass
 >>>>>>> 1907e6c ((feat) build a basic structure for the Purdue method)
+=======
+@dataclass(frozen=True)
+>>>>>>> a1d2c1a ((feat) use non-linear root-finding method to solve for the speed that balances the side plate)
 class FluidProperties:
     density: float
     viscosity: float
 
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> a1d2c1a ((feat) use non-linear root-finding method to solve for the speed that balances the side plate)
 @dataclass(frozen=True)
 class GearParams:
     inner_radius: float
     rotation_speed: float
 
 
+<<<<<<< HEAD
 @dataclass
 class IterationParameters:
     base_step_size: float
     max_step_size: float
     min_step_size: float
 =======
+=======
+>>>>>>> a1d2c1a ((feat) use non-linear root-finding method to solve for the speed that balances the side plate)
 @dataclass
 class IterationParameters:
     step_size: float
