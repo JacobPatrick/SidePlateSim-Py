@@ -2,12 +2,17 @@ import numpy as np
 from dataclasses import dataclass, field
 
 
+<<<<<<< HEAD
 @dataclass(frozen=True)
+=======
+@dataclass
+>>>>>>> 1907e6c ((feat) build a basic structure for the Purdue method)
 class FluidProperties:
     density: float
     viscosity: float
 
 
+<<<<<<< HEAD
 @dataclass(frozen=True)
 class GearParams:
     inner_radius: float
@@ -19,6 +24,11 @@ class IterationParameters:
     base_step_size: float
     max_step_size: float
     min_step_size: float
+=======
+@dataclass
+class IterationParameters:
+    step_size: float
+>>>>>>> 1907e6c ((feat) build a basic structure for the Purdue method)
     total_time: float
 
 
