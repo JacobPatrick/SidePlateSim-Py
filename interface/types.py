@@ -2,23 +2,15 @@ import numpy as np
 from dataclasses import dataclass, field
 
 
-@dataclass(frozen=True)
+@dataclass
 class FluidProperties:
     density: float
     viscosity: float
 
 
-@dataclass(frozen=True)
-class GearParams:
-    inner_radius: float
-    rotation_speed: float
-
-
 @dataclass
 class IterationParameters:
-    base_step_size: float
-    max_step_size: float
-    min_step_size: float
+    step_size: float
     total_time: float
 
 
@@ -32,9 +24,7 @@ class GearProfilePath:
 class SidePlateState:
     p: np.ndarray = field(default_factory=lambda: np.zeros(3))
     v: np.ndarray = field(default_factory=lambda: np.zeros(3))
-    q: np.ndarray = field(
-        default_factory=lambda: np.array([1.0, 0.0, 0.0, 0.0])
-    )
+    q: np.ndarray = field(default_factory=lambda: np.array([1.0, 0.0, 0.0, 0.0]))
     w: np.ndarray = field(default_factory=lambda: np.zeros(3))
 
 
@@ -56,7 +46,7 @@ class FluidProp:
 class Pressure:
     p: np.ndarray
     F: float
-    center: np.ndarray
+    center: tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -64,9 +54,7 @@ class SidePlateMassProp:
     m: float
     Ic: np.ndarray
     barycenter: np.ndarray
-    g_vec: np.ndarray = field(
-        default_factory=lambda: np.array([0.0, 0.0, -9.81])
-    )
+    g_vec: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, -9.81]))
 
 
 @dataclass
