@@ -1,12 +1,18 @@
 import yaml
 from dataclasses import dataclass
-from interface.types import FluidProperties, SidePlateMassProp, IterationParameters
+from interface.types import (
+    FluidProperties,
+    SidePlateMassProp,
+    GearParams,
+    IterationParameters,
+)
 
 
 @dataclass
 class SimulationConfig:
     fluid: FluidProperties
     side_plate: SidePlateMassProp
+    gear: GearParams
     iteration: IterationParameters
 
     @staticmethod
@@ -18,11 +24,13 @@ class SimulationConfig:
 
         fluid_prop = FluidProperties(**data["fluid"])
         side_plate_params = SidePlateMassProp(**data["side_plate"])
+        gear_params = GearParams(**data["gear"])
         iter_params = IterationParameters(**data["iteration"])
 
         return SimulationConfig(
             fluid=fluid_prop,
             side_plate=side_plate_params,
+            gear=gear_params,
             iteration=iter_params,
         )
 

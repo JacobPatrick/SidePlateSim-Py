@@ -10,15 +10,12 @@ from interface.types import (
     GearProfilePath,
     SidePlateState,
     SidePlateMassProp,
-    FilmParam,
     FluidProp,
-    Pressure,
-    ForceTorque,
 )
 from src.solver.mock_LPM import MockLPM
 from src.solver.mesh_generator import MeshGenerator
-from solver.reynolds import ReynoldsSolver
-from utils.calc_film_params import calc_film_params
+from src.solver.reynolds import ReynoldsSolver
+from src.solver.balaced_v import BalancedVSolver
 from utils.math_tools import quaternion_multiply
 
 
@@ -81,66 +78,56 @@ def main():
         # 2. 网格划分与油膜参数求解
         drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
         slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
-        drive_film_param = calc_film_params(
-            drive_mesh, state, drive_p_lst, omega, "drive"
-        )
-        slave_film_param = calc_film_params(
-            slave_mesh, state, slave_p_lst, omega, "slave"
-        )
-
-        # 3. 求解油膜压力
+        
         fluid_prop = FluidProp(mu=oil_mu)
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
 
-        drive_pressure = drive_reynolds_solver.solve(drive_film_param)
-        slave_pressure = slave_reynolds_solver.solve(slave_film_param)
-
-        p_drive = drive_pressure.p
-        p_slave = slave_pressure.p
-        F_drive = drive_pressure.F
-        F_slave = slave_pressure.F
-        center_drive = drive_pressure.center
-        center_slave = slave_pressure.center
-
-        # TEST: 只是一个简单的测试
-        P_air = 1e5 * 0.0024687143080106173
-        F = np.array([0, 0, F_drive + F_slave - 2 * P_air])
-        f = F[2] - m * 9.81
-        M_drive = np.cross(
-            side_plate_mass_prop.barycenter - [*center_drive, 0],
-            [0, 0, F_drive],
+        balance_v_solver = BalancedVSolver(
+            drive_mesh=drive_mesh,
+            slave_mesh=slave_mesh,
+            drive_p_lst=drive_p_lst,
+            slave_p_lst=slave_p_lst,
+            omega=omega,
+            side_plate_mass_prop=side_plate_mass_prop,
+            drive_reynolds_solver=drive_reynolds_solver,
+            slave_reynolds_solver=slave_reynolds_solver,
+            state=state,
+            F_else=np.array([0.0, 0.0, -9.81 * m]),
+            M_else=np.zeros(3),
         )
-        M_slave = np.cross(
-            side_plate_mass_prop.barycenter - [*center_slave, 0],
-            [0, 0, F_slave],
-        )
-        M = M_drive + M_slave
 
-        # TODO: 内循环: 寻找合适的速度使侧板受力平衡
-        v_z = 0
-        w_x = 0
-        w_y = 0
+        current_state = balance_v_solver.solve()
 
-        # 更新侧板速度（当前时刻）
-        state.v = [0.0, 0.0, v_z]
-        state.w = [w_x, w_y, 0.0]
+        log1 = f"时间: {t * 1000:.3f}ms\n"
+        log2 = f"侧板位置: z = {current_state.p[2]}\n"
+        log3 = f"侧板速度: v_z = {current_state.v[2]}\n"
+        log4 = f"侧板姿态: q = {current_state.q}\n"
+        log5 = f"侧板角速度: w = {current_state.w}\n\n"
+        with open("results/log/20260715_1.txt", "a") as f:
+            f.write(
+                log1 + log2 + log3 + log4 + log5
+            )
 
         # 更新侧板位置和姿态（下一时刻）
-        state.p += state.v * dt
-        omega_quat_new = np.array([0.0, *state.w])
+        state.p += current_state.v * dt
+        omega_quat_new = np.array([0.0, *current_state.w])
         q_dot = 0.5 * quaternion_multiply(state.q, omega_quat_new)
         state.q += q_dot * dt
         state.q /= np.linalg.norm(state.q)
 
+        # 传递侧板速度，加速下一轮平衡求解收敛
+        state.v = current_state.v
+        state.w = current_state.w
+
         t += dt
 
-    plot_pressure_distribution(
-        drive_mesh, p_drive, fig_name="p_drive_dist", mode="save"
-    )
-    plot_pressure_distribution(
-        slave_mesh, p_slave, fig_name="p_slave_dist", mode="save"
-    )
+    # plot_pressure_distribution(
+    #     drive_mesh, p_drive, fig_name="p_drive_dist", mode="save"
+    # )
+    # plot_pressure_distribution(
+    #     slave_mesh, p_slave, fig_name="p_slave_dist", mode="save"
+    # )
 
 
 if __name__ == "__main__":

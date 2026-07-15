@@ -2,10 +2,16 @@ import numpy as np
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True)
 class FluidProperties:
     density: float
     viscosity: float
+
+
+@dataclass(frozen=True)
+class GearParams:
+    inner_radius: float
+    rotation_speed: float
 
 
 @dataclass
