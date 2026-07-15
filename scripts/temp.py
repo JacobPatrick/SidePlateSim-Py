@@ -4,111 +4,144 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
-from src.geometry.gear_profile import InvoluteGear
-from src.postproc.visualize import (
-    plot_shapely_poly,
-    plot_mesh,
-    plot_pressure_distribution,
-    plot_leak_rate,
-)
-from src.geometry.mesher import shapely_to_meshpy
-from src.solver.reynolds_solver import ReynoldsSolver
+from src.postproc.visualize import plot_pressure_distribution
 from src.config.config import load_config
-from utils.load_geometry import (
-    load_geometry_from_dxf,
-    load_gear_profile_from_dxf,
+from interface.types import (
+    GearProfilePath,
+    SidePlateState,
+    SidePlateMassProp,
+    FilmParam,
+    FluidProp,
+    Pressure,
+    ForceTorque,
 )
-from utils.geo_trans import boolean_operation, transform_operation
-from utils.export import export_mesh
-from utils.timer import timer
-from src.solver.forward_dynamics import forward_dynamics_step
+from src.solver.mock_LPM import MockLPM
+from src.solver.mesh_generator import MeshGenerator
+from solver.reynolds import ReynoldsSolver
+from utils.calc_film_params import calc_film_params
+from utils.math_tools import quaternion_multiply
+
+
+def vec_converge(state1, state2, tol=1e-6):
+    """
+    侧板平衡判定准则
+    """
+    return np.allclose(state1.v, state2.v, atol=tol) and np.allclose(
+        state1.w, state2.w, atol=tol
+    )
 
 
 def main():
-    params = load_config('SimParams_2')
+    params = load_config("SimParams_2")
 
     # 齿轮参数
     rotation_speed = np.float64(params.gear.rotation_speed)
     omega = rotation_speed * 2 * np.pi / 60.0  # 转速转换为角速度 [rad/s]
-    status_vec = eval(params.gear.status_vec)
-
+    
     # 油液物性
     oil_mu = np.float64(params.fluid.viscosity)
 
-    # 油膜参数
-    p_lst = eval(params.film.p_lst)
+    # 时间步长与总时间
+    dt = float(params.iteration.step_size)
+    total_time = np.float64(params.iteration.total_time)
 
-    # 1. 导入齿轮轮廓
-    gear_poly = load_gear_profile_from_dxf("assets/gear_profile.DXF")
+    # 侧板质量属性
+    m = np.float64(params.side_plate.m)
+    barycenter = np.array(eval(params.side_plate.barycenter))
+    Ic = np.array(eval(params.side_plate.Ic))
+    g_vec = np.array(eval(params.side_plate.g_vec))
+    side_plate_mass_prop = SidePlateMassProp(
+        m=m, barycenter=barycenter, Ic=Ic, g_vec=g_vec
+    )
 
-    # 油膜区域随齿轮旋转而变化
-    for deg in range(0, 31, 2):
-        rotated = transform_operation(
-            gear_poly,
-            transform="rotate",
-            rotate_param=(np.radians(deg), (0, 0)),
+    mock_lpm = MockLPM()
+    drive_gear_profile_path = GearProfilePath(
+        gear_poly_path="assets/drive_gear.DXF",
+        relief_poly_path="assets/relief.DXF",
+    )
+    slave_gear_profile_path = GearProfilePath(
+        gear_poly_path="assets/slave_gear.DXF",
+        relief_poly_path="assets/relief.DXF",
+    )
+    drive_mesh_generator = MeshGenerator(drive_gear_profile_path, omega, "drive")
+    slave_mesh_generator = MeshGenerator(slave_gear_profile_path, omega, "slave")
+
+    # 侧板迭代平衡
+    t = 0
+    state = SidePlateState(
+        p=np.array([0.0, 0.0, 1e-4]),
+        v=np.array([0.0, 0.0, 0.0]),
+        q=np.array([1.0, 0.0, 0.0, 0.0]),
+        w=np.zeros(3),
+    )
+    while t <= total_time:
+        # 1. 集中参数法求齿腔压力
+        drive_p_lst, slave_p_lst = mock_lpm.solve(t)
+
+        # 2. 网格划分与油膜参数求解
+        drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
+        slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
+        drive_film_param = calc_film_params(
+            drive_mesh, state, drive_p_lst, omega, "drive"
         )
-        relief_poly = load_geometry_from_dxf("assets/relief.DXF")
-        film_poly = boolean_operation(
-            rotated, relief_poly, operation="difference"
-        )
-        # 2. 划分网格
-        mesh = shapely_to_meshpy(film_poly, max_area=1e-7, markers=p_lst)
-
-        # 3. 求仿真油膜参数表
-        points = np.array(mesh.points)
-        elements = np.array(mesh.elements)
-        centroids = np.mean(points[elements], axis=1)
-
-        # 3.1 计算节点处的油膜厚度
-        h_cells = (
-            -np.sin(status_vec[4]) * np.array([p[0] for p in centroids])
-            + np.sin(status_vec[2]) * np.array([p[1] for p in centroids])
-            + status_vec[0] * np.ones(len(centroids))
-        )
-        # 非负检查
-        assert np.any(
-            h_cells > 0
-        ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
-        # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
-        h_grad = (-np.sin(status_vec[4]), np.sin(status_vec[2]))
-
-        # 3.2 确定边界条件
-        bc_lst = [p_lst[0]]
-        for _, p_val in p_lst[1:]:
-            bc_lst.append(p_val)
-
-        # 3.3 计算三角网格中心处的相对运动速度
-        U_cells = np.array([[-omega * p[1], omega * p[0]] for p in centroids])
-
-        # 3.4 计算三角网格中心处的挤压速度（两表面相互远离为正）
-        ht_cells = (
-            status_vec[1] * np.ones(len(centroids))
-            + np.cos(status_vec[2])
-            * status_vec[3]
-            * np.array([p[1] for p in centroids])
-            - np.cos(status_vec[4])
-            * status_vec[5]
-            * np.array([p[0] for p in centroids])
+        slave_film_param = calc_film_params(
+            slave_mesh, state, slave_p_lst, omega, "slave"
         )
 
-        case = ReynoldsSolver(
-            mesh,
-            h_cells,
-            mu=oil_mu,
-            U_cells=U_cells,
-            ht_cells=ht_cells,
-            h_grad=h_grad,
-            bc_lst=bc_lst,
+        # 3. 求解油膜压力
+        fluid_prop = FluidProp(mu=oil_mu)
+        drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
+        slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
+
+        drive_pressure = drive_reynolds_solver.solve(drive_film_param)
+        slave_pressure = slave_reynolds_solver.solve(slave_film_param)
+
+        p_drive = drive_pressure.p
+        p_slave = slave_pressure.p
+        F_drive = drive_pressure.F
+        F_slave = slave_pressure.F
+        center_drive = drive_pressure.center
+        center_slave = slave_pressure.center
+
+        # TEST: 只是一个简单的测试
+        P_air = 1e5 * 0.0024687143080106173
+        F = np.array([0, 0, F_drive + F_slave - 2 * P_air])
+        f = F[2] - m * 9.81
+        M_drive = np.cross(
+            side_plate_mass_prop.barycenter - [*center_drive, 0],
+            [0, 0, F_drive],
         )
-        p = case.solve()
-        F, (i, j) = case.calc_force(p)
-
-        plot_pressure_distribution(
-            mesh, p, fig_name="pressure_distribution", mode='save'
+        M_slave = np.cross(
+            side_plate_mass_prop.barycenter - [*center_slave, 0],
+            [0, 0, F_slave],
         )
-        print(f"油膜压力: {F:.3f}N, 作用点坐标: ({i:.5f}, {j:.5f})m")
+        M = M_drive + M_slave
+
+        # TODO: 内循环: 寻找合适的速度使侧板受力平衡
+        v_z = 0
+        w_x = 0
+        w_y = 0
+
+        # 更新侧板速度（当前时刻）
+        state.v = [0.0, 0.0, v_z]
+        state.w = [w_x, w_y, 0.0]
+
+        # 更新侧板位置和姿态（下一时刻）
+        state.p += state.v * dt
+        omega_quat_new = np.array([0.0, *state.w])
+        q_dot = 0.5 * quaternion_multiply(state.q, omega_quat_new)
+        state.q += q_dot * dt
+        state.q /= np.linalg.norm(state.q)
+
+        t += dt
+
+    plot_pressure_distribution(
+        drive_mesh, p_drive, fig_name="p_drive_dist", mode="save"
+    )
+    plot_pressure_distribution(
+        slave_mesh, p_slave, fig_name="p_slave_dist", mode="save"
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

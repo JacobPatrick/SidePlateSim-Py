@@ -77,7 +77,7 @@ def forward_dynamics_step(
     q_new = q_new / np.linalg.norm(q_new)
 
     w_new = w + w_dot * dt
-    
+
     state_new = {
         "p": p_new,
         "v": v_new,
