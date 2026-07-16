@@ -104,7 +104,7 @@ def main():
         log3 = f"侧板速度: v_z = {current_state.v[2]}\n"
         log4 = f"侧板姿态: q = {current_state.q}\n"
         log5 = f"侧板角速度: w = {current_state.w}\n\n"
-        with open("results/log/20260715_1.txt", "a") as f:
+        with open("results/log/20260716_2.txt", "a") as f:
             f.write(
                 log1 + log2 + log3 + log4 + log5
             )
