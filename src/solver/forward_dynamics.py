@@ -1,5 +1,5 @@
 import numpy as np
-from interface.type import (
+from interface.types import (
     SidePlateState,
     SidePlateMassProp,
     ForceTorque,

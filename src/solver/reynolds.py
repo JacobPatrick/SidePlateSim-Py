@@ -1,5 +1,5 @@
 import numpy as np
-from interface.type import FilmParam, FluidProp, Pressure
+from interface.types import FilmParam, FluidProp, Pressure
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve

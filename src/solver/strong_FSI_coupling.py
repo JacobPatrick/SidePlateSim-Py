@@ -1,5 +1,5 @@
 import numpy as np
-from interface.type import (
+from interface.types import (
     SidePlateState,
     ForceTorque,
     SidePlateMassProp,
@@ -172,7 +172,7 @@ class SingleStepFSISolver:
                 if res_norm < self.tol:
                     state_pred = state_calc
                     print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
-                    with open("results/log/20260714_4.txt", "a") as f:
+                    with open("results/log/20260714_6.txt", "a") as f:
                         f.write(
                             f"单步 FSI 求解完成，迭代次数: {num_iter}, 残差: {res_norm:.3e}\n"
                         )
