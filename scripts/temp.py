@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import numpy as np
 from src.postproc.visualize import plot_pressure_distribution
 from src.config.config import load_config
-from interface.type import (
+from interface.types import (
     GearProfilePath,
     SidePlateState,
     FilmParam,
@@ -88,7 +88,7 @@ def main():
     new_state = None
 
     while t < total_time:
-        with open("results/log/20260714_4.txt", "a") as f:
+        with open("results/log/20260714_6.txt", "a") as f:
             f.write(f"时间: {t*1000:.3f}ms\n")
             
         dt_state["value"] = controller.get_dt()
@@ -140,7 +140,7 @@ def main():
             slave_reynolds_solver=slave_reynolds_solver,
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
-            max_sub_iter=6,
+            max_sub_iter=15,
             tol=1e-4,
         )
 

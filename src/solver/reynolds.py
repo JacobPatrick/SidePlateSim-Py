@@ -1,13 +1,5 @@
 import numpy as np
-<<<<<<< HEAD
-<<<<<<< HEAD
 from interface.types import FilmParam, FluidProp, Pressure
-=======
-from dataclasses import dataclass
-=======
->>>>>>> 75042e8 ((chores) reformatted the code)
-from interface.type import FilmParam, FluidProp, Pressure
->>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
@@ -19,7 +11,6 @@ class ReynoldsSolver:
     默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
-<<<<<<< HEAD
     def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
         self.mu = fluid_prop.mu
@@ -27,32 +18,6 @@ class ReynoldsSolver:
         self.equ = ()
 
     def _assemble_reynolds_fvm(self, film_param: FilmParam):
-=======
-    def __init__(
-        self,
-        mesh: MeshInfo,
-        fluid_prop: FluidProp,
-    ):
-        """
-        Args:
-            mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
-            h_cells: 网格单元处的油膜厚度 (N,) [m]
-            mu: 动力粘度 [Pa·s]
-            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
-            ht_cells: 挤压速度场 (N,) [m/s]
-            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
-        """
-        self.mesh = mesh
-        self.mu = fluid_prop.mu
-
-        self.equ = ()
-
-<<<<<<< HEAD
-    def _assemble_reynolds_fvm(self):
->>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
-=======
-    def _assemble_reynolds_fvm(self, film_param: FilmParam):
->>>>>>> 17e18fd ((refactor) decouple Reynolds solver initialization from the film parameters)
         """
         组装 2D Reynolds 方程的稀疏矩阵与右端项
         """
@@ -169,26 +134,12 @@ class ReynoldsSolver:
 
         # RHS
         for i in range(n_cells):
-<<<<<<< HEAD
-<<<<<<< HEAD
             conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
-=======
-            conv = 0.5 * (
-                U_cells[i, 0] * h_grad[0]
-                + U_cells[i, 1] * h_grad[1]
-            )
->>>>>>> 17e18fd ((refactor) decouple Reynolds solver initialization from the film parameters)
-=======
-            conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
->>>>>>> 40c723c ((refactor) separate the function for calculating the film params)
             ht = ht_cells[i]
             b[i] += (conv + ht) * areas[i]
 
         self.equ = (A.tocsr(), b)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     def solve(self, film_param: FilmParam):
         """
         1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
@@ -222,24 +173,6 @@ class ReynoldsSolver:
 
         return Pressure(p=p, F=F, center=center)
 
-=======
->>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
-=======
-    def solve(self):
-=======
-    def solve(self, film_param: FilmParam):
->>>>>>> 17e18fd ((refactor) decouple Reynolds solver initialization from the film parameters)
-        """
-        1. 求解线性系统 A * x = b，返回压力分布 p
-        2. 计算油膜压力 F 和作用点坐标 (i, j)
-        """
-        self._assemble_reynolds_fvm(film_param)
-        p = spsolve(self.equ[0], self.equ[1])
-        F, center = self._calc_force(p)
-
-        return Pressure(p=p, F=F, center=center)
-
->>>>>>> 44a00c0 ((feat) add the slave gear to the simulation system)
     def _calc_force(self, p):
         """
         根据压力分布求油膜压力
@@ -260,28 +193,7 @@ class ReynoldsSolver:
 
         return F, center
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
     def _calc_flow(self, p, film_param: FilmParam):
-=======
-    def solve(self):
-        """
-        1. 求解线性系统 A * x = b，返回压力分布 p
-        2. 计算油膜压力 F 和作用点坐标 (i, j)
-        """
-        p = spsolve(self.equ[0], self.equ[1])
-        F, center = self._calc_force(p)
-
-        return Pressure(p=p, F=F, center=center)
-
-=======
->>>>>>> 44a00c0 ((feat) add the slave gear to the simulation system)
-    def _calc_flow(self, p):
->>>>>>> 28b548c ((feat) basically coupled each of the simulation modules)
-=======
-    def _calc_flow(self, p, film_param: FilmParam):
->>>>>>> 17e18fd ((refactor) decouple Reynolds solver initialization from the film parameters)
         """
         根据压力场求流速场
         """

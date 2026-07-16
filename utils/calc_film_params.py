@@ -1,5 +1,5 @@
 import numpy as np
-from interface.type import SidePlateState, FilmParam
+from interface.types import SidePlateState, FilmParam
 from utils.math_tools import quaternion_to_euler
 
 DRIVE_GEAR_CENTER = (0.0305, 0)
