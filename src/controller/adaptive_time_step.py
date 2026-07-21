@@ -42,7 +42,7 @@ class AdaptiveTimeStepController:
         ht_cells: np.ndarray,
         structural_vec: float,
         structural_acc: float,
-    ) -> float:
+    ):
         """
         根据当前步物理场计算下一步时间步长
         Args:
@@ -99,8 +99,6 @@ class AdaptiveTimeStepController:
         # 记录当前步指标供历史参考
         self.prev_min_h = h_min
         self.prev_max_ht = ht_max
-
-        return self.dt
 
     def get_dt(self) -> float:
         return self.dt

@@ -36,7 +36,9 @@ def main():
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 时间步长与总时间
-    dt = float(params.iteration.step_size)
+    base_dt = float(params.iteration.base_step_size)
+    max_dt = float(params.iteration.max_step_size)
+    min_dt = float(params.iteration.min_step_size)
     total_time = np.float64(params.iteration.total_time)
 
     # 侧板质量属性
@@ -50,10 +52,7 @@ def main():
 
     # 2. 初始化迭代控制器、迭代参数与求解器
     controller = AdaptiveTimeStepController()
-    dt_state = {"value": dt}
-
-    def on_dt_update(new_dt):
-        dt_state["value"] = new_dt
+    dt_state = {"value": base_dt}
 
     t = 0.0
     state = SidePlateState(
@@ -88,9 +87,6 @@ def main():
     new_state = None
 
     while t < total_time:
-        with open("results/log/20260714_6.txt", "a") as f:
-            f.write(f"时间: {t*1000:.3f}ms\n")
-            
         dt_state["value"] = controller.get_dt()
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
@@ -140,29 +136,43 @@ def main():
             slave_reynolds_solver=slave_reynolds_solver,
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
-            max_sub_iter=15,
+            max_sub_iter=20,
             tol=1e-4,
         )
 
         new_state = single_step_fsi_solver.solve(
-            dt=dt,
+            dt=dt_state["value"],
             state_prev=state,
             force_torque=ForceTorque(F=F, M=M),
-            on_retry_callback=on_dt_update
         )
-        dt = dt_state["value"]
+
+        if new_state is not None:
+            # 单步 FSI 求解成功，推进时间
+            with open("results/log/20260721_1.txt", "a") as f:
+                f.write(f"时间: {t*1000:.3f}ms\n\n")
+
+            side_plate_vec_z = new_state.v[2]
+            side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt_state["value"]
+            controller.compute_next_dt(
+                h_cells=drive_film_param.h_cells,
+                ht_cells=drive_film_param.ht_cells,
+                structural_vec=side_plate_vec_z,
+                structural_acc=side_plate_acc_z,
+            )
+            dt_state["value"] = controller.get_dt()
         
-        side_plate_vec_z = new_state.v[2]
-        side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt
-        controller.compute_next_dt(
-            h_cells=drive_film_param.h_cells,
-            ht_cells=drive_film_param.ht_cells,
-            structural_vec=side_plate_vec_z,
-            structural_acc=side_plate_acc_z,
-        )
+            state = new_state
+            t += dt_state["value"]
+
+        elif new_state is None and dt_state["value"] > min_dt:
+            # 单步 FSI 求解失败，尝试减小 dt 并重做
+            dt_state["value"] *= 0.5
         
-        state = new_state
-        t += dt
+        else:
+            # 单步 FSI 求解失败，且 dt 已经小于最小值，终止仿真
+            raise RuntimeError(
+                f"FSI 单步求解器未收敛，且时间步长已经小于最小值，终止仿真。"
+            )
 
     # 4. 可视化最终状态下油膜压力分布
     plot_pressure_distribution(
