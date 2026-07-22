@@ -100,7 +100,7 @@ class SingleStepFSISolver:
         dt: float,
         state_prev: SidePlateState,
         force_torque: ForceTorque,
-    ) -> SidePlateState | None:
+    ):
         self.prev_res_vec = None
 
         # 1. 状态预测
@@ -167,7 +167,7 @@ class SingleStepFSISolver:
                 state_pred = state_calc
                 print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
                 solve_info = {
-                    'num_iter': num_iter,   
+                    'num_iter': num_iter,
                     'res_norm': res_norm,
                     'F_drive': F_drive,
                     'F_slave': F_slave,
@@ -193,3 +193,4 @@ class SingleStepFSISolver:
             print(
                 f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
             )
+            return None, None

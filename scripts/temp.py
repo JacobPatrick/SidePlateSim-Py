@@ -55,18 +55,18 @@ def main():
     dt_state = {"value": base_dt}
 
     t = 0.0
-    # state = SidePlateState(
-    #     p=np.array([0.0, 0.0, 1e-4]),
-    #     v=np.array([0.0, 0.0, 0.0]),
-    #     q=np.array([1.0, 0.0, 0.0, 0.0]),
-    #     w=np.zeros(3),
-    # )
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 9.40300729e-05]), 
-        v=np.array([ 0.0,         0.0,        0.0]), 
-        q=np.array([ 9.99999741e-01,  1.87655302e-06, -7.19988122e-04,  8.32394780e-10]), 
-        w=np.array([ 0.0, 0.0,  0.0])
+        p=np.array([0.0, 0.0, 1e-4]),
+        v=np.array([0.0, 0.0, 0.0]),
+        q=np.array([1.0, 0.0, 0.0, 0.0]),
+        w=np.zeros(3),
     )
+    # state = SidePlateState(
+    #     p=np.array([0.0, 0.0, 9.40300729e-05]), 
+    #     v=np.array([ 0.0,         0.0,        0.0]), 
+    #     q=np.array([ 9.99999741e-01,  1.87655302e-06, -7.19988122e-04,  8.32394780e-10]), 
+    #     w=np.array([ 0.0, 0.0,  0.0])
+    # )
 
     mock_lpm = MockLPM()
     drive_gear_profile_path = GearProfilePath(
@@ -173,7 +173,7 @@ def main():
                 f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
                 f.write(f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n")
 
-        elif new_state is None and dt_state["value"] > min_dt:
+        elif new_state is None and dt_state["value"] >= 2 * min_dt:
             # 单步 FSI 求解失败，尝试减小 dt 并重做
             dt_state["value"] *= 0.5
         
