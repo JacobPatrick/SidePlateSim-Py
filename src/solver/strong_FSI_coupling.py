@@ -166,20 +166,14 @@ class SingleStepFSISolver:
             if res_norm < self.tol:
                 state_pred = state_calc
                 print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
-                with open("results/log/20260721_1.txt", "a") as f:
-                    f.write(
-                        f"单步 FSI 求解完成，迭代次数: {num_iter}, 残差: {res_norm:.3e}\n"
-                    )
-                    f.write(
-                        f"油膜力: 主动轮 F={F_drive:.2f}N, 从动轮 F={F_slave:.2f}N\n"
-                    )
-                    f.write(
-                        f"侧板受力: F={(F[2] - self.side_plate_mass_prop.m * 9.81):.2f}N\n"
-                    )
-                    f.write(
-                        f"侧板状态: p={state_pred.p}, v={state_pred.v}, q={state_pred.q}, w={state_pred.w}\n"
-                    )
-                return state_pred
+                solve_info = {
+                    'num_iter': num_iter,   
+                    'res_norm': res_norm,
+                    'F_drive': F_drive,
+                    'F_slave': F_slave,
+                    'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
+                }
+                return state_pred, solve_info
 
             #  2.4. Aitken 松弛
             if self.prev_res_vec is not None:
@@ -197,5 +191,5 @@ class SingleStepFSISolver:
 
         else:
             print(
-                    f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
-                )
+                f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
+            )
