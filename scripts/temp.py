@@ -55,11 +55,17 @@ def main():
     dt_state = {"value": base_dt}
 
     t = 0.0
+    # state = SidePlateState(
+    #     p=np.array([0.0, 0.0, 1e-4]),
+    #     v=np.array([0.0, 0.0, 0.0]),
+    #     q=np.array([1.0, 0.0, 0.0, 0.0]),
+    #     w=np.zeros(3),
+    # )
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 1e-4]),
-        v=np.array([0.0, 0.0, 0.0]),
-        q=np.array([1.0, 0.0, 0.0, 0.0]),
-        w=np.zeros(3),
+        p=np.array([0.0, 0.0, 9.40300729e-05]), 
+        v=np.array([ 0.0,         0.0,        0.0]), 
+        q=np.array([ 9.99999741e-01,  1.87655302e-06, -7.19988122e-04,  8.32394780e-10]), 
+        w=np.array([ 0.0, 0.0,  0.0])
     )
 
     mock_lpm = MockLPM()
@@ -85,9 +91,9 @@ def main():
     drive_mesh = None
     slave_mesh = None
     new_state = None
+    dt_state["value"] = base_dt
 
     while t < total_time:
-        dt_state["value"] = controller.get_dt()
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
@@ -140,7 +146,7 @@ def main():
             tol=1e-4,
         )
 
-        new_state = single_step_fsi_solver.solve(
+        new_state, solve_info = single_step_fsi_solver.solve(
             dt=dt_state["value"],
             state_prev=state,
             force_torque=ForceTorque(F=F, M=M),
@@ -148,9 +154,6 @@ def main():
 
         if new_state is not None:
             # 单步 FSI 求解成功，推进时间
-            with open("results/log/20260721_1.txt", "a") as f:
-                f.write(f"时间: {t*1000:.3f}ms\n\n")
-
             side_plate_vec_z = new_state.v[2]
             side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt_state["value"]
             controller.compute_next_dt(
@@ -159,10 +162,16 @@ def main():
                 structural_vec=side_plate_vec_z,
                 structural_acc=side_plate_acc_z,
             )
-            dt_state["value"] = controller.get_dt()
         
             state = new_state
             t += dt_state["value"]
+            dt_state["value"] = controller.get_dt()
+            with open("results/log/20260722_1.txt", "a") as f:
+                f.write(f"时间: {t*1000:.3f}ms\n")
+                f.write(f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n")
+                f.write(f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n")
+                f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
+                f.write(f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n")
 
         elif new_state is None and dt_state["value"] > min_dt:
             # 单步 FSI 求解失败，尝试减小 dt 并重做
