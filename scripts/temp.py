@@ -39,7 +39,7 @@ def main():
     oil_mu = np.float64(params.fluid.viscosity)
 
     # 时间步长与总时间
-    dt = float(params.iteration.step_size)
+    dt = float(params.iteration.base_step_size)
     total_time = np.float64(params.iteration.total_time)
 
     # 侧板质量属性
@@ -66,7 +66,7 @@ def main():
     # 侧板迭代平衡
     t = 0
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 1e-4]),
+        p=np.array([0.0, 0.0, 5e-5]),
         v=np.array([0.0, 0.0, 0.0]),
         q=np.array([1.0, 0.0, 0.0, 0.0]),
         w=np.zeros(3),
@@ -104,7 +104,7 @@ def main():
         log3 = f"侧板速度: v_z = {current_state.v[2]}\n"
         log4 = f"侧板姿态: q = {current_state.q}\n"
         log5 = f"侧板角速度: w = {current_state.w}\n\n"
-        with open("results/log/20260716_2.txt", "a") as f:
+        with open("results/log/20260723_purdue_1.txt", "a") as f:
             f.write(
                 log1 + log2 + log3 + log4 + log5
             )

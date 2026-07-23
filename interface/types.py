@@ -16,7 +16,9 @@ class GearParams:
 
 @dataclass
 class IterationParameters:
-    step_size: float
+    base_step_size: float
+    max_step_size: float
+    min_step_size: float
     total_time: float
 
 
