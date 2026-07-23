@@ -84,9 +84,9 @@ class BalancedVSolver:
         )
         if result.success:
             va, vb, vc = result.x
-            va = np.clip(va, -1.0, 1.0)
-            vb = np.clip(vb, -1.0, 1.0)
-            vc = np.clip(vc, -1.0, 1.0)
+            va = np.clip(va, -10.0, 10.0)
+            vb = np.clip(vb, -10.0, 10.0)
+            vc = np.clip(vc, -10.0, 10.0)
             vz, wx, wy = solve_vz_wx_wy(va, vb, vc, roll, pitch)
             new_state = SidePlateState(
                 p=self.state.p,

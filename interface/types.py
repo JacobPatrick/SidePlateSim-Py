@@ -37,8 +37,14 @@ class IterationParameters:
 >>>>>>> a1d2c1a ((feat) use non-linear root-finding method to solve for the speed that balances the side plate)
 @dataclass
 class IterationParameters:
+<<<<<<< HEAD
     step_size: float
 >>>>>>> 1907e6c ((feat) build a basic structure for the Purdue method)
+=======
+    base_step_size: float
+    max_step_size: float
+    min_step_size: float
+>>>>>>> d6d30a6 ((fix) fix a bug when import simulation params)
     total_time: float
 
 
