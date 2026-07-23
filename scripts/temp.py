@@ -51,7 +51,9 @@ def main():
     )
 
     # 2. 初始化迭代控制器、迭代参数与求解器
-    controller = AdaptiveTimeStepController()
+    controller = AdaptiveTimeStepController(
+        dt_init=base_dt, dt_max=max_dt, dt_min=min_dt
+    )
     dt_state = {"value": base_dt}
 
     t = 0.0
