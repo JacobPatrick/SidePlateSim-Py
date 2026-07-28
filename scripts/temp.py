@@ -69,10 +69,14 @@ def main():
     q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
 <<<<<<< HEAD
+<<<<<<< HEAD
         p=np.array([0.0, 0.0, z]),
 =======
         p=np.array([0.0, 0.0, 5e-5]),
 >>>>>>> d6d30a6 ((fix) fix a bug when import simulation params)
+=======
+        p=np.array([0.0, 0.0, z]),
+>>>>>>> 17a3496 ((chores) use (z, roll, pitch) to initialz side plate state)
         v=np.array([0.0, 0.0, 0.0]),
         q=np.array(q),
         w=np.array([0.0, 0.0, 0.0]),
@@ -112,6 +116,7 @@ def main():
         log5 = f"侧板角速度: w = {current_state.w}\n\n"
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
         with open("results/log/20260728_purdue_1.txt", "a") as f:
 =======
         with open("results/log/20260716_2.txt", "a") as f:
@@ -119,6 +124,9 @@ def main():
 =======
         with open("results/log/20260723_purdue_1.txt", "a") as f:
 >>>>>>> d6d30a6 ((fix) fix a bug when import simulation params)
+=======
+        with open("results/log/20260728_purdue_1.txt", "a") as f:
+>>>>>>> 17a3496 ((chores) use (z, roll, pitch) to initialz side plate state)
             f.write(
                 log1 + log2 + log3 + log4 + log5
             )
