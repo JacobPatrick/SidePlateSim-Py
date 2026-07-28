@@ -16,7 +16,7 @@ from src.solver.mock_LPM import MockLPM
 from src.solver.mesh_generator import MeshGenerator
 from src.solver.reynolds import ReynoldsSolver
 from src.solver.balaced_v import BalancedVSolver
-from utils.math_tools import quaternion_multiply
+from utils.math_tools import quaternion_multiply, euler_to_quaternion
 
 
 def vec_converge(state1, state2, tol=1e-6):
@@ -65,11 +65,13 @@ def main():
 
     # 侧板迭代平衡
     t = 0
+    z, roll, pitch = 7.2508847e-05, -3.3115796e-03, 1.5923379e-03
+    q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 5e-5]),
+        p=np.array([0.0, 0.0, z]),
         v=np.array([0.0, 0.0, 0.0]),
-        q=np.array([1.0, 0.0, 0.0, 0.0]),
-        w=np.zeros(3),
+        q=np.array(q),
+        w=np.array([0.0, 0.0, 0.0]),
     )
     while t <= total_time:
         # 1. 集中参数法求齿腔压力
@@ -104,7 +106,7 @@ def main():
         log3 = f"侧板速度: v_z = {current_state.v[2]}\n"
         log4 = f"侧板姿态: q = {current_state.q}\n"
         log5 = f"侧板角速度: w = {current_state.w}\n\n"
-        with open("results/log/20260723_purdue_1.txt", "a") as f:
+        with open("results/log/20260728_purdue_1.txt", "a") as f:
             f.write(
                 log1 + log2 + log3 + log4 + log5
             )
