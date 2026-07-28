@@ -12,6 +12,7 @@ from utils.math_tools import quaternion_to_euler
 DRIVE_GEAR_CENTER = (0.0305, 0)
 SLAVE_GEAR_CENTER = (-0.0305, 0)
 GEAR_RADIUS = 0.035
+P_AIR = 1e5 * 0.0024687143080106173
 
 
 def solve_va_vb_vc(vz, wx, wy, roll, pitch):
@@ -83,9 +84,6 @@ class BalancedVSolver:
         )
         if result.success:
             va, vb, vc = result.x
-            va = np.clip(va, -10.0, 10.0)
-            vb = np.clip(vb, -10.0, 10.0)
-            vc = np.clip(vc, -10.0, 10.0)
             vz, wx, wy = solve_vz_wx_wy(va, vb, vc, roll, pitch)
             new_state = SidePlateState(
                 p=self.state.p,
@@ -95,7 +93,7 @@ class BalancedVSolver:
             )
             return new_state
         else:
-            raise RuntimeError("侧板轴向平衡求解失败: " + result.message)
+            return None
 
     def _res_func(self, squeeze_v: np.ndarray):
         va, vb, vc = squeeze_v
@@ -125,14 +123,13 @@ class BalancedVSolver:
         center_drive = drive_pressure.center
         center_slave = slave_pressure.center
 
-        P_air = 1e5 * 0.0024687143080106173
-        F = np.array([0, 0, F_drive + F_slave - 2 * P_air])
+        F = np.array([0, 0, F_drive + F_slave - 2 * P_AIR])
         M_drive = np.cross(
-            self.side_plate_mass_prop.barycenter - [*center_drive, 0],
+            [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
             [0, 0, F_drive],
         )
         M_slave = np.cross(
-            self.side_plate_mass_prop.barycenter - [*center_slave, 0],
+            [*center_slave, 0] - self.side_plate_mass_prop.barycenter,
             [0, 0, F_slave],
         )
         M = M_drive + M_slave
