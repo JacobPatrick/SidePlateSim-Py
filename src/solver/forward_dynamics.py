@@ -4,10 +4,15 @@ from interface.types import (
     SidePlateMassProp,
     ForceTorque,
 )
-from utils.math_tools import quaternion_multiply, quaternion_to_euler
+from utils.math_tools import (
+    quaternion_multiply,
+    quaternion_to_euler,
+    rotate_vector_by_quaternion,
+    quaternion_to_rotation_matrix,
+)
 
-DRIVE_GEAR_CENTER = (0.0305, 0)
-SLAVE_GEAR_CENTER = (-0.0305, 0)
+DRIVE_GEAR_CENTER = (0.0305, 0, 0)
+SLAVE_GEAR_CENTER = (-0.0305, 0, 0)
 GEAR_RADIUS = 0.035
 
 
@@ -54,26 +59,7 @@ class ForwardDynamicsSolver:
         w = w * self.rot_mask
 
         # 1. 计算旋转矩阵 R (从体坐标系到惯性坐标系)
-        qw, qx, qy, qz = q
-        R = np.array(
-            [
-                [
-                    1 - 2 * (qy**2 + qz**2),
-                    2 * (qx * qy - qw * qz),
-                    2 * (qx * qz + qw * qy),
-                ],
-                [
-                    2 * (qx * qy + qw * qz),
-                    1 - 2 * (qx**2 + qz**2),
-                    2 * (qy * qz - qw * qx),
-                ],
-                [
-                    2 * (qx * qz - qw * qy),
-                    2 * (qy * qz + qw * qx),
-                    1 - 2 * (qx**2 + qy**2),
-                ],
-            ]
-        )
+        R = quaternion_to_rotation_matrix(q)
 
         # 2. 所受合力
         G = np.array([m * i for i in g_vec])
@@ -118,7 +104,49 @@ class ForwardDynamicsSolver:
 
         z = p[2]
         if z < z_safe:
-            p[2] = z_safe + 1e-8
-            v[2] = np.max([v[2], 0.0])
+            # 1. 还原位姿为上一时间步的位姿
+            p = state.p.copy()
+            q = state.q.copy()
+
+            # 2. 确定接触点坐标
+            n_sideplate = rotate_vector_by_quaternion(
+                q, np.array([0.0, 0.0, 1.0])
+            )  # 侧板法向量
+            n_projected = np.array(
+                [n_sideplate[0], n_sideplate[1], 0.0]
+            )  # 投影到 xy 平面
+            product = np.dot(
+                n_projected,
+                (np.array(DRIVE_GEAR_CENTER) - np.array(SLAVE_GEAR_CENTER)),
+            )
+            if product > 0:
+                # 接触点在驱动齿轮侧
+                P = np.array(
+                    DRIVE_GEAR_CENTER
+                ) + GEAR_RADIUS * n_projected / np.linalg.norm(n_projected)
+            else:
+                # 接触点在从动齿轮侧
+                P = np.array(
+                    SLAVE_GEAR_CENTER
+                ) + GEAR_RADIUS * n_projected / np.linalg.norm(n_projected)
+
+            r = P - p  # 侧板质心到接触点的向量
+            n = np.array([0.0, 0.0, 1.0])  # 齿轮端面法向量
+            e = 0.2  # 恢复系数
+
+            # 3. 求接触点在惯性系下的速度
+            v_p = v + np.cross(w, r)
+
+            # 4. 求法向侧板有效质量
+            m_eff = 1 / (
+                1 / m + np.cross(r, n) @ (self.Ic_inv @ np.cross(r, n))
+            )
+
+            # 5. 求冲量的法向分量（标量）
+            J_n = -(1 + e) * m_eff * np.dot(v_p, n)
+
+            # 6. 更新速度和角速度
+            v += (J_n / m) * n
+            w += self.Ic_inv @ np.cross(r, J_n * n)
 
         return SidePlateState(p=p, v=v, q=q, w=w)
