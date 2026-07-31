@@ -115,3 +115,42 @@ def quat_slerp(q1, q2, t):
     """四元数简单归一化线性插值，严格可用 SLERP"""
     q = (1 - t) * q1 + t * q2
     return q / np.linalg.norm(q)
+
+
+def rotate_vector_by_quaternion(q, v):
+    """
+    使用四元数旋转向量
+    """
+    # 解包四元数和待旋转向量
+    w, x, y, z = q
+    vx, vy, vz = v
+
+    # 预计算公共项，减少乘法次数
+    xx = x * x
+    yy = y * y
+    zz = z * z
+    xy = x * y
+    xz = x * z
+    yz = y * z
+    wx = w * x
+    wy = w * y
+    wz = w * z
+
+    # 计算旋转后的向量分量
+    vx_new = (
+        vx * (1.0 - 2.0 * (yy + zz))
+        + vy * 2.0 * (xy - wz)
+        + vz * 2.0 * (xz + wy)
+    )
+    vy_new = (
+        vx * 2.0 * (xy + wz)
+        + vy * (1.0 - 2.0 * (xx + zz))
+        + vz * 2.0 * (yz - wx)
+    )
+    vz_new = (
+        vx * 2.0 * (xz - wy)
+        + vy * 2.0 * (yz + wx)
+        + vz * (1.0 - 2.0 * (xx + yy))
+    )
+
+    return (vx_new, vy_new, vz_new)

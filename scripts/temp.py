@@ -22,6 +22,7 @@ from src.solver.reynolds import ReynoldsSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from src.solver.strong_FSI_coupling import SingleStepFSISolver
 from utils.calc_film_params import calc_film_params
+from utils.math_tools import euler_to_quaternion
 
 
 def main():
@@ -57,18 +58,14 @@ def main():
     dt_state = {"value": base_dt}
 
     t = 0.0
+    z, roll, pitch = 3e-05, 0.0, 0.0
+    q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 1e-4]),
+        p=np.array([0.0, 0.0, z]),
         v=np.array([0.0, 0.0, 0.0]),
-        q=np.array([1.0, 0.0, 0.0, 0.0]),
-        w=np.zeros(3),
+        q=np.array(q),
+        w=np.array([0.0, 0.0, 0.0]),
     )
-    # state = SidePlateState(
-    #     p=np.array([0.0, 0.0, 9.40300729e-05]), 
-    #     v=np.array([ 0.0,         0.0,        0.0]), 
-    #     q=np.array([ 9.99999741e-01,  1.87655302e-06, -7.19988122e-04,  8.32394780e-10]), 
-    #     w=np.array([ 0.0, 0.0,  0.0])
-    # )
 
     mock_lpm = MockLPM()
     drive_gear_profile_path = GearProfilePath(
@@ -168,7 +165,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260722_1.txt", "a") as f:
+            with open("results/log/20260730_2.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n")
                 f.write(f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n")
