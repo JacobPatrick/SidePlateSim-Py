@@ -145,11 +145,11 @@ class SingleStepFSISolver:
                 [0, 0, F_drive + F_slave - 2 * P_AIR]
             )  # TODO: 加入齿腔油压和背压
             M_drive = np.cross(
-                self.side_plate_mass_prop.barycenter - [*center_drive, 0],
+                [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_drive],
             )
             M_slave = np.cross(
-                self.side_plate_mass_prop.barycenter - [*center_slave, 0],
+                [*center_slave, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_slave],
             )
             M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
