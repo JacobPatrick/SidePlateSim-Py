@@ -147,6 +147,144 @@ def plot_pressure_distribution(
     plt.close()
 
 
+def plot_gear_pressure_distribution(
+    mesh1, p1, mesh2, p2, fig_name, contour="True", mode="save"
+):
+    # 绘制第一个齿轮端面的压力分布
+    points = np.array(mesh1.points)
+    elements = np.array(mesh1.elements)
+    centroids = np.mean(points[elements], axis=1)
+
+    _, ax = plt.subplots(figsize=(6, 6))
+    x = points[:, 0]
+    y = points[:, 1]
+    triang = mtri.Triangulation(x, y, triangles=elements)
+
+    if contour == "Only":
+        ax.triplot(x, y, elements, color="white", lw=0.5)
+
+        cx = centroids[:, 0]
+        cy = centroids[:, 1]
+        cs = ax.tricontour(
+            cx,
+            cy,
+            p1,
+            levels=8,
+            cmap="jet",
+            linewidths=0.8,
+        )
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
+
+        for facet in mesh1.facets:
+            facet_points = np.array([mesh1.points[i] for i in facet])
+            ax.plot(
+                facet_points[:, 0],
+                facet_points[:, 1],
+                color="black",
+                lw=0.8,
+            )
+    else:
+        c = ax.tripcolor(
+            triang,
+            facecolors=p1,
+            cmap="jet",
+            shading="flat",
+        )
+        c.set_clim(vmin=p1.min(), vmax=p1.max())  # 设置 colorbar 范围
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(c, cax=cax, label="Pressure [Pa]")
+
+        if contour == "True":
+            cx = centroids[:, 0]
+            cy = centroids[:, 1]
+            ax.tricontour(
+                cx,
+                cy,
+                p1,
+                levels=10,
+                colors="black",
+                linewidths=0.8,
+                alpha=0.5,
+            )
+
+    # 绘制第二个齿轮端面的压力分布
+    points = np.array(mesh2.points)
+    elements = np.array(mesh2.elements)
+    centroids = np.mean(points[elements], axis=1)
+
+    _, ax = plt.subplots(figsize=(6, 6))
+    x = points[:, 0]
+    y = points[:, 1]
+    triang = mtri.Triangulation(x, y, triangles=elements)
+
+    if contour == "Only":
+        ax.triplot(x, y, elements, color="white", lw=0.5)
+
+        cx = centroids[:, 0]
+        cy = centroids[:, 1]
+        cs = ax.tricontour(
+            cx,
+            cy,
+            p2,
+            levels=8,
+            cmap="jet",
+            linewidths=0.8,
+        )
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
+
+        for facet in mesh2.facets:
+            facet_points = np.array([mesh2.points[i] for i in facet])
+            ax.plot(
+                facet_points[:, 0],
+                facet_points[:, 1],
+                color="black",
+                lw=0.8,
+            )
+    else:
+        c = ax.tripcolor(
+            triang,
+            facecolors=p2,
+            cmap="jet",
+            shading="flat",
+        )
+        c.set_clim(vmin=p2.min(), vmax=p2.max())  # 设置 colorbar 范围
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        plt.colorbar(c, cax=cax, label="Pressure [Pa]")
+
+        if contour == "True":
+            cx = centroids[:, 0]
+            cy = centroids[:, 1]
+            ax.tricontour(
+                cx,
+                cy,
+                p2,
+                levels=10,
+                colors="black",
+                linewidths=0.8,
+                alpha=0.5,
+            )
+
+    ax.set_aspect("equal")
+    if mode == "save":
+        fig = ax.get_figure()
+        fig.subplots_adjust(right=0.88)
+        plt.savefig(
+            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            dpi=300,
+            bbox_inches="tight",
+            pad_inches=0.02,
+        )
+    elif mode == "show":
+        plt.show()
+    plt.close()
+
+
 def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
     fig, ax = plt.subplots(figsize=(7, 6))
     facets = np.array(mesh.facets)

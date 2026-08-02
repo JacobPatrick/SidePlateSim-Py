@@ -4,7 +4,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import numpy as np
-from src.postproc.visualize import plot_pressure_distribution
+from src.postproc.visualize import plot_gear_pressure_distribution
 from src.config.config import load_config
 from interface.types import (
     GearProfilePath,
@@ -165,7 +165,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260730_2.txt", "a") as f:
+            with open("results/log/20260731_2.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n")
                 f.write(f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n")
@@ -183,13 +183,9 @@ def main():
             )
 
     # 4. 可视化最终状态下油膜压力分布
-    plot_pressure_distribution(
-        drive_mesh, p_drive, fig_name="drive_p_dist", mode='save'
+    plot_gear_pressure_distribution(
+        drive_mesh, p_drive, slave_mesh, p_slave, fig_name="p_dist", mode='save'
     )
-    plot_pressure_distribution(
-        slave_mesh, p_slave, fig_name="slave_p_dist", mode='save'
-    )
-    # TODO: 先分开画，之后再写合一起画
 
 
 if __name__ == '__main__':
