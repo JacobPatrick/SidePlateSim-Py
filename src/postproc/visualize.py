@@ -150,12 +150,24 @@ def plot_pressure_distribution(
 def plot_gear_pressure_distribution(
     mesh1, p1, mesh2, p2, fig_name, contour="True", mode="save"
 ):
-    # 绘制第一个齿轮端面的压力分布
-    points = np.array(mesh1.points)
-    elements = np.array(mesh1.elements)
-    centroids = np.mean(points[elements], axis=1)
+    points1 = np.array(mesh1.points)
+    elements1 = np.array(mesh1.elements)
+    centroids1 = np.mean(points1[elements1], axis=1)
+    points2 = np.array(mesh2.points)
+    elements2 = np.array(mesh2.elements)
+    centroids2 = np.mean(points2[elements2], axis=1)
+    
+    pmin = min(p1.min(), p2.min())
+    pmax = max(p1.max(), p2.max())
 
-    _, ax = plt.subplots(figsize=(6, 6))
+    # 合并两个 mesh
+    n1 = len(points1)
+    points = np.vstack([points1, points2])
+    elements = np.vstack([elements1, elements2 + n1])
+    centroids = np.vstack([centroids1, centroids2])
+    p_cells = np.concatenate([p1, p2])
+
+    _, ax = plt.subplots(figsize=(12, 6))
     x = points[:, 0]
     y = points[:, 1]
     triang = mtri.Triangulation(x, y, triangles=elements)
@@ -168,7 +180,7 @@ def plot_gear_pressure_distribution(
         cs = ax.tricontour(
             cx,
             cy,
-            p1,
+            p_cells,
             levels=8,
             cmap="jet",
             linewidths=0.8,
@@ -185,58 +197,6 @@ def plot_gear_pressure_distribution(
                 color="black",
                 lw=0.8,
             )
-    else:
-        c = ax.tripcolor(
-            triang,
-            facecolors=p1,
-            cmap="jet",
-            shading="flat",
-        )
-        c.set_clim(vmin=p1.min(), vmax=p1.max())  # 设置 colorbar 范围
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="3%", pad=0.05)
-        plt.colorbar(c, cax=cax, label="Pressure [Pa]")
-
-        if contour == "True":
-            cx = centroids[:, 0]
-            cy = centroids[:, 1]
-            ax.tricontour(
-                cx,
-                cy,
-                p1,
-                levels=10,
-                colors="black",
-                linewidths=0.8,
-                alpha=0.5,
-            )
-
-    # 绘制第二个齿轮端面的压力分布
-    points = np.array(mesh2.points)
-    elements = np.array(mesh2.elements)
-    centroids = np.mean(points[elements], axis=1)
-
-    _, ax = plt.subplots(figsize=(6, 6))
-    x = points[:, 0]
-    y = points[:, 1]
-    triang = mtri.Triangulation(x, y, triangles=elements)
-
-    if contour == "Only":
-        ax.triplot(x, y, elements, color="white", lw=0.5)
-
-        cx = centroids[:, 0]
-        cy = centroids[:, 1]
-        cs = ax.tricontour(
-            cx,
-            cy,
-            p2,
-            levels=8,
-            cmap="jet",
-            linewidths=0.8,
-        )
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="3%", pad=0.05)
-        plt.colorbar(cs, cax=cax, label="Pressure [Pa]")
-
         for facet in mesh2.facets:
             facet_points = np.array([mesh2.points[i] for i in facet])
             ax.plot(
@@ -248,11 +208,11 @@ def plot_gear_pressure_distribution(
     else:
         c = ax.tripcolor(
             triang,
-            facecolors=p2,
+            facecolors=p_cells,
             cmap="jet",
             shading="flat",
         )
-        c.set_clim(vmin=p2.min(), vmax=p2.max())  # 设置 colorbar 范围
+        c.set_clim(vmin=p_cells.min(), vmax=p_cells.max())  # 设置 colorbar 范围
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
         plt.colorbar(c, cax=cax, label="Pressure [Pa]")
@@ -263,14 +223,64 @@ def plot_gear_pressure_distribution(
             ax.tricontour(
                 cx,
                 cy,
-                p2,
+                p_cells,
                 levels=10,
                 colors="black",
                 linewidths=0.8,
                 alpha=0.5,
             )
+    
+        ax.set_aspect("equal")
+        if mode == "save":
+            fig = ax.get_figure()
+            fig.subplots_adjust(right=0.88)
+            plt.savefig(
+                f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+                dpi=300,
+                bbox_inches="tight",
+                pad_inches=0.02,
+            )
+        elif mode == "show":
+            plt.show()
+        plt.close()
+
+
+def plot_film_thickness_distribution(mesh1, h1, mesh2, h2, fig_name, mode="save"):
+    points1 = np.array(mesh1.points)
+    elements1 = np.array(mesh1.elements)
+    points2 = np.array(mesh2.points)
+    elements2 = np.array(mesh2.elements)
+
+    # 转换为微米
+    h1 = 1e6 * h1
+    h2 = 1e6 * h2
+
+    # 合并两个 mesh
+    n1 = len(points1)
+    points = np.vstack([points1, points2])
+    elements = np.vstack([elements1, elements2 + n1])
+    h = np.concatenate([h1, h2])
+
+    # 绘图
+    _, ax = plt.subplots(figsize=(12, 6))
+    x = points[:, 0]
+    y = points[:, 1]
+    triang = mtri.Triangulation(x, y, triangles=elements)
+
+    c = ax.tripcolor(
+        triang,
+        facecolors=h,
+        cmap="jet",
+        shading="flat",
+    )
+
+    # colorbar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="3%", pad=0.05)
+    plt.colorbar(c, cax=cax, label="Thickness [μm]")
 
     ax.set_aspect("equal")
+
     if mode == "save":
         fig = ax.get_figure()
         fig.subplots_adjust(right=0.88)
