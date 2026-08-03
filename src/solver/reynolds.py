@@ -11,20 +11,7 @@ class ReynoldsSolver:
     默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
-    def __init__(
-        self,
-        mesh: MeshInfo,
-        fluid_prop: FluidProp,
-    ):
-        """
-        Args:
-            mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
-            h_cells: 网格单元处的油膜厚度 (N,) [m]
-            mu: 动力粘度 [Pa·s]
-            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
-            ht_cells: 挤压速度场 (N,) [m/s]
-            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
-        """
+    def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
         self.mu = fluid_prop.mu
 
@@ -155,12 +142,32 @@ class ReynoldsSolver:
 
     def solve(self, film_param: FilmParam):
         """
-        1. 求解线性系统 A * x = b，返回压力分布 p
+        1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
         2. 计算油膜压力 F 和作用点坐标 (i, j)
         """
         self._assemble_reynolds_fvm(film_param)
-        p = spsolve(self.equ[0], self.equ[1])
-        F, center = self._calc_force(p)
+        A, b = self.equ
+
+        # 检查是否存在碰撞
+        h_cells = film_param.h_cells
+        if np.any(h_cells <= 1e-7):
+            area = np.where(h_cells <= 1e-7)[0].tolist()
+            p_contact = 1e5  # 碰撞区域压力固定为标准大气压
+            A, b = _process_contact_area(A.toarray(), b, area, p_contact)
+
+            p = []
+            p_film = spsolve(A, b)
+            p_iter = iter(p_film)
+            # 拼接得到完整齿轮端面区域压力场
+            for idx in len(h_cells):
+                if idx in area:
+                    p.append(p_contact)
+                else:
+                    p.append(next(p_iter))
+            F, center = self._calc_force(p)
+        else:
+            p = spsolve(A, b)
+            F, center = self._calc_force(p)
 
         return Pressure(p=p, F=F, center=center)
 
@@ -343,3 +350,30 @@ class ReynoldsSolver:
             leak_rate.append(flow_rate)
 
         return leak_rate
+
+
+def _process_contact_area(A: np.ndarray, b: np.ndarray, S: list, x0: float):
+    """
+    处理侧板和齿轮端面接触区域的油膜，将压力固定为常数，并作为其余部分的边界条件继续求解
+    """
+    # 若没有接触区域，直接跳过此步骤
+    if len(S) == 0:
+        return A, b
+
+    n = A.shape[0]
+    S = np.array(S)
+
+    # 获取补集索引 (S^c)
+    S_comp = np.setdiff1d(np.arange(n), S)
+
+    # 删除 S 对应的行，得到欠定方程组 A'x = b'
+    A_prime = A[S_comp, :]
+    b_prime = b[S_comp]
+
+    # 计算移项后的常数项 b_tilde
+    b_tilde = b_prime - x0 * np.sum(A_prime[:, S], axis=1)
+
+    # 提取 A_tilde，即 A' 中删除 S 对应的列
+    A_tilde = A_prime[:, S_comp]
+
+    return A_tilde, b_tilde

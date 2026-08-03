@@ -19,6 +19,7 @@ from src.controller.adaptive_time_step import AdaptiveTimeStepController
 from src.solver.mock_LPM import MockLPM
 from src.solver.mesh_generator import MeshGenerator
 from src.solver.reynolds import ReynoldsSolver
+from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from src.solver.strong_FSI_coupling import SingleStepFSISolver
 from utils.calc_film_params import calc_film_params
@@ -97,12 +98,20 @@ def main():
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
         # 2. 网格划分与油膜参数求解
-        drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
-        slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
-        drive_film_param = calc_film_params(drive_mesh, state, drive_p_lst, omega, "drive")
-        slave_film_param = calc_film_params(slave_mesh, state, slave_p_lst, omega, "slave")
+        drive_mesh = drive_mesh_generator.solve(
+            t=t, p_lst=drive_p_lst, state=state
+        )
+        slave_mesh = slave_mesh_generator.solve(
+            t=t, p_lst=slave_p_lst, state=state
+        )
+        drive_film_param = calc_film_params(
+            drive_mesh, state, drive_p_lst, omega, "drive"
+        )
+        slave_film_param = calc_film_params(
+            slave_mesh, state, slave_p_lst, omega, "slave"
+        )
 
-        # 3. 求解油膜压力
+        # 3.1 求解油膜压力
         fluid_prop = FluidProp(mu=oil_mu)
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
@@ -117,9 +126,34 @@ def main():
         center_drive = drive_pressure.center
         center_slave = slave_pressure.center
 
+        # 3.2 求解接触力（如有）
+        if np.any(drive_film_param.h_cells < 1e-7):
+            contact_solver = ContactSolver(drive_mesh, k=1e9, c=1e6)
+            C_drive, center_contact = contact_solver.solve(drive_film_param)
+            center_drive[0] = (
+                center_drive[0] * F_drive + center_contact[0] * C_drive
+            ) / (F_drive + C_drive)
+            center_drive[1] = (
+                center_drive[1] * F_drive + center_contact[1] * C_drive
+            ) / (F_drive + C_drive)
+            F_drive += C_drive
+
+        if np.any(slave_film_param.h_cells < 1e-7):
+            contact_solver = ContactSolver(slave_mesh, k=1e9, c=1e6)
+            C_slave, center_contact = contact_solver.solve(slave_film_param)
+            center_slave[0] = (
+                center_slave[0] * F_slave + center_contact[0] * C_slave
+            ) / (F_slave + C_slave)
+            center_slave[1] = (
+                center_slave[1] * F_slave + center_contact[1] * C_slave
+            ) / (F_slave + C_slave)
+            F_slave += C_slave
+
         # 4. 求解正向动力学
         P_air = 1e5 * 0.0024687143080106173
-        F = np.array([0, 0, F_drive + F_slave - 2 * P_air])  # TODO: 加入齿腔油压和背压
+        F = np.array(
+            [0, 0, F_drive + F_slave - 2 * P_air]
+        )  # TODO: 加入齿腔油压和背压
         f = F[2] - m * 9.81
         M_drive = np.cross(
             side_plate_mass_prop.barycenter - [*center_drive, 0],
@@ -161,21 +195,27 @@ def main():
                 structural_vec=side_plate_vec_z,
                 structural_acc=side_plate_acc_z,
             )
-        
+
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260731_2.txt", "a") as f:
+            with open("results/log/20260803_1.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
-                f.write(f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n")
-                f.write(f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n")
+                f.write(
+                    f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
+                )
+                f.write(
+                    f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
+                )
                 f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
-                f.write(f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n")
+                f.write(
+                    f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"
+                )
 
         elif new_state is None and dt_state["value"] >= 2 * min_dt:
             # 单步 FSI 求解失败，尝试减小 dt 并重做
             dt_state["value"] *= 0.5
-        
+
         else:
             # 单步 FSI 求解失败，且 dt 已经小于最小值，终止仿真
             raise RuntimeError(

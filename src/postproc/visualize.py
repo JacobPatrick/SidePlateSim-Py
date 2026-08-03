@@ -156,7 +156,7 @@ def plot_gear_pressure_distribution(
     points2 = np.array(mesh2.points)
     elements2 = np.array(mesh2.elements)
     centroids2 = np.mean(points2[elements2], axis=1)
-    
+
     pmin = min(p1.min(), p2.min())
     pmax = max(p1.max(), p2.max())
 
@@ -229,7 +229,7 @@ def plot_gear_pressure_distribution(
                 linewidths=0.8,
                 alpha=0.5,
             )
-    
+
         ax.set_aspect("equal")
         if mode == "save":
             fig = ax.get_figure()
@@ -245,7 +245,9 @@ def plot_gear_pressure_distribution(
         plt.close()
 
 
-def plot_film_thickness_distribution(mesh1, h1, mesh2, h2, fig_name, mode="save"):
+def plot_film_thickness_distribution(
+    mesh1, h1, mesh2, h2, fig_name, mode="save"
+):
     points1 = np.array(mesh1.points)
     elements1 = np.array(mesh1.elements)
     points2 = np.array(mesh2.points)
