@@ -90,63 +90,21 @@ class ForwardDynamicsSolver:
         q /= np.linalg.norm(q)
 
         # 5. 碰撞检测与处理
-        roll, pitch, _ = quaternion_to_euler(*q)
+        # roll, pitch, _ = quaternion_to_euler(*q)
 
-        A = -GEAR_RADIUS * np.sin(pitch)
-        B = GEAR_RADIUS * np.sin(roll)
-        max_h = np.hypot(A, B)  # 倾斜带来的最大高度差
+        # A = -GEAR_RADIUS * np.sin(pitch)
+        # B = GEAR_RADIUS * np.sin(roll)
+        # max_h = np.hypot(A, B)  # 倾斜带来的最大高度差
 
-        offset_1 = DRIVE_GEAR_CENTER[0] * np.sin(pitch)
-        offset_2 = SLAVE_GEAR_CENTER[0] * np.sin(pitch)
-        z_crit_1 = offset_1 + max_h
-        z_crit_2 = offset_2 + max_h
-        z_safe = max(z_crit_1, z_crit_2)
+        # offset_1 = DRIVE_GEAR_CENTER[0] * np.sin(pitch)
+        # offset_2 = SLAVE_GEAR_CENTER[0] * np.sin(pitch)
+        # z_crit_1 = offset_1 + max_h
+        # z_crit_2 = offset_2 + max_h
+        # z_safe = max(z_crit_1, z_crit_2)
 
-        z = p[2]
-        if z < z_safe:
-            # 1. 还原位姿为上一时间步的位姿
-            p = state.p.copy()
-            q = state.q.copy()
-
-            # 2. 确定接触点坐标
-            n_sideplate = rotate_vector_by_quaternion(
-                q, np.array([0.0, 0.0, 1.0])
-            )  # 侧板法向量
-            n_projected = np.array(
-                [n_sideplate[0], n_sideplate[1], 0.0]
-            )  # 投影到 xy 平面
-            product = np.dot(
-                n_projected,
-                (np.array(DRIVE_GEAR_CENTER) - np.array(SLAVE_GEAR_CENTER)),
-            )
-            if product > 0:
-                # 接触点在驱动齿轮侧
-                P = np.array(
-                    DRIVE_GEAR_CENTER
-                ) + GEAR_RADIUS * n_projected / np.linalg.norm(n_projected)
-            else:
-                # 接触点在从动齿轮侧
-                P = np.array(
-                    SLAVE_GEAR_CENTER
-                ) + GEAR_RADIUS * n_projected / np.linalg.norm(n_projected)
-
-            r = P - p  # 侧板质心到接触点的向量
-            n = np.array([0.0, 0.0, 1.0])  # 齿轮端面法向量
-            e = 0.2  # 恢复系数
-
-            # 3. 求接触点在惯性系下的速度
-            v_p = v + np.cross(w, r)
-
-            # 4. 求法向侧板有效质量
-            m_eff = 1 / (
-                1 / m + np.cross(r, n) @ (self.Ic_inv @ np.cross(r, n))
-            )
-
-            # 5. 求冲量的法向分量（标量）
-            J_n = -(1 + e) * m_eff * np.dot(v_p, n)
-
-            # 6. 更新速度和角速度
-            v += (J_n / m) * n
-            w += self.Ic_inv @ np.cross(r, J_n * n)
+        # z = p[2]
+        # if z < z_safe:
+        #     # TODO: 罚函数法处理碰撞
+        #     pass
 
         return SidePlateState(p=p, v=v, q=q, w=w)
