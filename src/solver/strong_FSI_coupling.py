@@ -6,6 +6,7 @@ from interface.types import (
 )
 from meshpy.triangle import MeshInfo
 from src.solver.reynolds import ReynoldsSolver
+from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from utils.math_tools import quaternion_multiply, quat_slerp
 from utils.calc_film_params import calc_film_params
@@ -74,6 +75,8 @@ class SingleStepFSISolver:
         omega: float,
         drive_reynolds_solver: ReynoldsSolver,
         slave_reynolds_solver: ReynoldsSolver,
+        drive_contact_solver: ContactSolver,
+        slave_contact_solver: ContactSolver,
         dynamics_solver: ForwardDynamicsSolver,
         side_plate_mass_prop: SidePlateMassProp,
         max_sub_iter: int = 10,
@@ -86,6 +89,8 @@ class SingleStepFSISolver:
         self.omega = omega
         self.drive_reynolds_solver = drive_reynolds_solver
         self.slave_reynolds_solver = slave_reynolds_solver
+        self.drive_contact_solver = drive_contact_solver
+        self.slave_contact_solver = slave_contact_solver
         self.dynamics_solver = dynamics_solver
         self.side_plate_mass_prop = side_plate_mass_prop
         self.max_sub_iter = max_sub_iter
@@ -104,17 +109,14 @@ class SingleStepFSISolver:
         self.prev_res_vec = None
 
         # 1. 状态预测
-        state_pred = SidePlateState(
-            p=state_prev.p.copy(),
-            v=state_prev.v.copy(),
-            q=state_prev.q.copy(),
-            w=state_prev.w.copy(),
-        )
+        state_pred = state_prev
 
         # 2. 内收敛循环
+        base_tol = self.tol
         state_calc = state_prev
         for num_iter in range(1, self.max_sub_iter + 1):
-            #  2.1. 油膜求解
+            contact_flag = False
+            #  2.1 油膜求解
             drive_film_param = calc_film_params(
                 self.drive_mesh,
                 state_pred,
@@ -140,7 +142,32 @@ class SingleStepFSISolver:
             center_drive = calc_drive_pressure.center
             center_slave = calc_slave_pressure.center
 
-            # 2.2. 动力学求解
+            # 2.2 接触力求解
+            if np.any(drive_film_param.h_cells <= 0):
+                contact_flag = True
+                C_drive, center_contact = self.drive_contact_solver.solve(drive_film_param)
+                center_drive[0] = (
+                    center_drive[0] * F_drive + center_contact[0] * C_drive
+                ) / (F_drive + C_drive)
+                center_drive[1] = (
+                    center_drive[1] * F_drive + center_contact[1] * C_drive
+                ) / (F_drive + C_drive)
+                # print(f"主动轮接触力: {C_drive:.3g}N")
+                F_drive += C_drive
+
+            if np.any(slave_film_param.h_cells <= 0):
+                contact_flag = True
+                C_slave, center_contact = self.slave_contact_solver.solve(slave_film_param)
+                center_slave[0] = (
+                    center_slave[0] * F_slave + center_contact[0] * C_slave
+                ) / (F_slave + C_slave)
+                center_slave[1] = (
+                    center_slave[1] * F_slave + center_contact[1] * C_slave
+                ) / (F_slave + C_slave)
+                # print(f"从动轮接触力: {C_slave:.3g}N")
+                F_slave += C_slave
+
+            # 2.3 动力学求解
             F = np.array(
                 [0, 0, F_drive + F_slave - 2 * P_AIR]
             )  # TODO: 加入齿腔油压和背压
@@ -158,15 +185,21 @@ class SingleStepFSISolver:
                 dt, state_prev, force_torque
             )
 
-            # 2.3. 收敛判定
+            # 2.4 收敛判定
             res_vec = _calc_res_vec(
                 state_calc, state_pred, L_ref=1e-4, W_ref=1.0
             )
             res_norm = np.linalg.norm(res_vec)
+            if contact_flag:
+                # 若侧板和齿轮端面存在接触，放宽收敛判据
+                self.tol = base_tol * 100
+            else:
+                self.tol = base_tol
             if res_norm < self.tol:
                 state_pred = state_calc
                 print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
                 solve_info = {
+                    'success': True,
                     'num_iter': num_iter,
                     'res_norm': res_norm,
                     'F_drive': F_drive,
@@ -175,7 +208,7 @@ class SingleStepFSISolver:
                 }
                 return state_pred, solve_info
 
-            #  2.4. Aitken 松弛
+            #  2.5 Aitken 松弛
             if self.prev_res_vec is not None:
                 dres = res_vec - self.prev_res_vec
                 dres_dot = np.dot(dres, dres)
@@ -193,4 +226,13 @@ class SingleStepFSISolver:
             print(
                 f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
             )
-            return None, None
+            solve_info = {
+                'success': False,
+                'num_iter': self.max_sub_iter,
+                'res_norm': res_norm,
+                'F_drive': F_drive,
+                'F_slave': F_slave,
+                'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
+            }
+
+            return state_pred, solve_info

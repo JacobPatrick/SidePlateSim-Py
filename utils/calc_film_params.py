@@ -28,7 +28,7 @@ def calc_film_params(mesh, state: SidePlateState, p_lst, omega, gear_type):
     # ), "警告: 油膜厚度存在非正值，请检查齿轮位姿参数设置！"
     if np.any(h_cells <= 0):
         print("警告: 油膜厚度存在非正值！")
-        h_cells = np.clip(h_cells, 1e-7, None)  # 截断油膜厚度负值
+        # h_cells = np.clip(h_cells, 0.0, None)  # 截断油膜厚度负值
     # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
     h_grad = (-np.sin(pitch), np.sin(roll))
 

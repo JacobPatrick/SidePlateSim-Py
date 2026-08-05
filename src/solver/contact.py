@@ -25,7 +25,7 @@ class ContactSolver:
         """
         h_cells = film_param.h_cells
         ht_cells = film_param.ht_cells
-        contact_cells = np.where(h_cells < 1e-7)[0]
+        contact_cells = np.where(h_cells <= 0)[0]
 
         points = np.array(self.mesh.points)
         elements = np.array(self.mesh.elements)
@@ -36,14 +36,17 @@ class ContactSolver:
             p0, p1, p2 = points[e]
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
-        p = np.zeros(len(n_cells))
+        p = np.zeros(n_cells)
         for cell_idx in contact_cells:
             h = h_cells[cell_idx]
             ht = ht_cells[cell_idx]
-            force_magnitude = self.k * h + self.c * ht
+            force_magnitude = -self.k * h - self.c * ht
             p[cell_idx] = force_magnitude
 
         F = np.sum(p * areas)
+
+        contact_area = np.sum(areas[contact_cells])
+        print(f"接触面积: {contact_area * 1e6:.3g}mm^2, 最大穿透深度: {-np.min(h_cells[contact_cells]) * 1e6:.3g}mu m, 接触力: {F:.3g}N")
 
         # 若阻尼力大于弹力，截断，避免出现负接触力
         if F <= 1e-8:
@@ -51,5 +54,6 @@ class ContactSolver:
 
         i = np.sum(p * centroids[:, 0] * areas) / F
         j = np.sum(p * centroids[:, 1] * areas) / F
+        center = np.array([i, j])
 
-        return F, (i, j)
+        return F, center
