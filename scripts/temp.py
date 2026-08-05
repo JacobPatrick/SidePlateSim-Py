@@ -127,26 +127,28 @@ def main():
         center_slave = slave_pressure.center
 
         # 3.2 求解接触力（如有）
-        if np.any(drive_film_param.h_cells < 1e-7):
-            contact_solver = ContactSolver(drive_mesh, k=1e9, c=1e6)
-            C_drive, center_contact = contact_solver.solve(drive_film_param)
+        drive_contact_solver = ContactSolver(drive_mesh, k=1e16, c=1e11)
+        slave_contact_solver = ContactSolver(slave_mesh, k=1e16, c=1e11)
+        if np.any(drive_film_param.h_cells <= 0):
+            C_drive, center_contact = drive_contact_solver.solve(drive_film_param)
             center_drive[0] = (
                 center_drive[0] * F_drive + center_contact[0] * C_drive
             ) / (F_drive + C_drive)
             center_drive[1] = (
                 center_drive[1] * F_drive + center_contact[1] * C_drive
             ) / (F_drive + C_drive)
+            print(f"主动轮接触力: {C_drive:.2f}N")
             F_drive += C_drive
 
-        if np.any(slave_film_param.h_cells < 1e-7):
-            contact_solver = ContactSolver(slave_mesh, k=1e9, c=1e6)
-            C_slave, center_contact = contact_solver.solve(slave_film_param)
+        if np.any(slave_film_param.h_cells <= 0):
+            C_slave, center_contact = slave_contact_solver.solve(slave_film_param)
             center_slave[0] = (
                 center_slave[0] * F_slave + center_contact[0] * C_slave
             ) / (F_slave + C_slave)
             center_slave[1] = (
                 center_slave[1] * F_slave + center_contact[1] * C_slave
             ) / (F_slave + C_slave)
+            print(f"从动轮接触力: {C_slave:.2f}N")
             F_slave += C_slave
 
         # 4. 求解正向动力学
@@ -173,6 +175,8 @@ def main():
             omega=omega,
             drive_reynolds_solver=drive_reynolds_solver,
             slave_reynolds_solver=slave_reynolds_solver,
+            drive_contact_solver=drive_contact_solver,
+            slave_contact_solver=slave_contact_solver,
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
             max_sub_iter=20,
@@ -185,7 +189,7 @@ def main():
             force_torque=ForceTorque(F=F, M=M),
         )
 
-        if new_state is not None:
+        if solve_info["success"]:
             # 单步 FSI 求解成功，推进时间
             side_plate_vec_z = new_state.v[2]
             side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt_state["value"]
@@ -199,7 +203,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260803_1.txt", "a") as f:
+            with open("results/log/20260805_3.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
@@ -212,7 +216,7 @@ def main():
                     f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"
                 )
 
-        elif new_state is None and dt_state["value"] >= 2 * min_dt:
+        elif not solve_info["success"] and dt_state["value"] >= 2 * min_dt:
             # 单步 FSI 求解失败，尝试减小 dt 并重做
             dt_state["value"] *= 0.5
 

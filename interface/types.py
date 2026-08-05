@@ -56,7 +56,7 @@ class FluidProp:
 class Pressure:
     p: np.ndarray
     F: float
-    center: tuple[float, float]
+    center: np.ndarray
 
 
 @dataclass(frozen=True)
