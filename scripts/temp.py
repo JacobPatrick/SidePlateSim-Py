@@ -118,8 +118,7 @@ def main():
         center_slave = slave_pressure.center
 
         # 4. 求解正向动力学
-        P_air = 1e5 * 0.0024687143080106173
-        F = np.array([0, 0, F_drive + F_slave - 2 * P_air])  # TODO: 加入齿腔油压和背压
+        F = np.array([0, 0, F_drive + F_slave])  # TODO: 加入齿腔油压和背压
         f = F[2] - m * 9.81
         M_drive = np.cross(
             side_plate_mass_prop.barycenter - [*center_drive, 0],
