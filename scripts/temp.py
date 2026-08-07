@@ -127,8 +127,8 @@ def main():
         center_slave = slave_pressure.center
 
         # 3.2 求解接触力（如有）
-        drive_contact_solver = ContactSolver(drive_mesh, k=1e16, c=1e11)
-        slave_contact_solver = ContactSolver(slave_mesh, k=1e16, c=1e11)
+        drive_contact_solver = ContactSolver(drive_mesh, k=1e14, c=1e8)
+        slave_contact_solver = ContactSolver(slave_mesh, k=1e14, c=1e8)
         if np.any(drive_film_param.h_cells <= 0):
             C_drive, center_contact = drive_contact_solver.solve(drive_film_param)
             center_drive[0] = (
@@ -152,9 +152,8 @@ def main():
             F_slave += C_slave
 
         # 4. 求解正向动力学
-        P_air = 1e5 * 0.0024687143080106173
         F = np.array(
-            [0, 0, F_drive + F_slave - 2 * P_air]
+            [0, 0, F_drive + F_slave]
         )  # TODO: 加入齿腔油压和背压
         f = F[2] - m * 9.81
         M_drive = np.cross(
@@ -203,7 +202,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260805_3.txt", "a") as f:
+            with open("results/log/20260805_5.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
