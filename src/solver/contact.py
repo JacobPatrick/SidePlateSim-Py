@@ -46,7 +46,9 @@ class ContactSolver:
         F = np.sum(p * areas)
 
         contact_area = np.sum(areas[contact_cells])
-        print(f"接触面积: {contact_area * 1e6:.3g}mm^2, 最大穿透深度: {-np.min(h_cells[contact_cells]) * 1e6:.3g}mu m, 接触力: {F:.3g}N")
+        print(
+            f"接触面积: {contact_area * 1e6:.3g}mm^2, 最大穿透深度: {-np.min(h_cells[contact_cells]) * 1e6:.3g}mu m, 接触力: {F:.3g}N"
+        )
 
         # 若阻尼力大于弹力，截断，避免出现负接触力
         if F <= 1e-8:

@@ -6,8 +6,6 @@ from interface.types import (
 )
 from utils.math_tools import (
     quaternion_multiply,
-    quaternion_to_euler,
-    rotate_vector_by_quaternion,
     quaternion_to_rotation_matrix,
 )
 
@@ -88,23 +86,5 @@ class ForwardDynamicsSolver:
 
         q += q_dot * dt
         q /= np.linalg.norm(q)
-
-        # 5. 碰撞检测与处理
-        # roll, pitch, _ = quaternion_to_euler(*q)
-
-        # A = -GEAR_RADIUS * np.sin(pitch)
-        # B = GEAR_RADIUS * np.sin(roll)
-        # max_h = np.hypot(A, B)  # 倾斜带来的最大高度差
-
-        # offset_1 = DRIVE_GEAR_CENTER[0] * np.sin(pitch)
-        # offset_2 = SLAVE_GEAR_CENTER[0] * np.sin(pitch)
-        # z_crit_1 = offset_1 + max_h
-        # z_crit_2 = offset_2 + max_h
-        # z_safe = max(z_crit_1, z_crit_2)
-
-        # z = p[2]
-        # if z < z_safe:
-        #     # TODO: 罚函数法处理碰撞
-        #     pass
 
         return SidePlateState(p=p, v=v, q=q, w=w)
