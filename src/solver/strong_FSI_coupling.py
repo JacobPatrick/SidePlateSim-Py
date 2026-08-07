@@ -11,8 +11,6 @@ from src.solver.forward_dynamics import ForwardDynamicsSolver
 from utils.math_tools import quaternion_multiply, quat_slerp
 from utils.calc_film_params import calc_film_params
 
-P_AIR = 1e5 * 0.0024687143080106173
-
 
 def _calc_res_vec(s_calc, s_pred, L_ref=3e-2, H_ref=1e-4, W_ref=1.0):
     """
@@ -104,7 +102,7 @@ class SingleStepFSISolver:
         self,
         dt: float,
         state_prev: SidePlateState,
-        force_torque: ForceTorque,
+        non_film_force_torque: ForceTorque,
     ):
         self.prev_res_vec = None
 
@@ -145,32 +143,26 @@ class SingleStepFSISolver:
             # 2.2 接触力求解
             if np.any(drive_film_param.h_cells <= 0):
                 contact_flag = True
-                C_drive, center_contact = self.drive_contact_solver.solve(drive_film_param)
-                center_drive[0] = (
-                    center_drive[0] * F_drive + center_contact[0] * C_drive
+                C_drive, center_contact = self.drive_contact_solver.solve(
+                    drive_film_param
+                )
+                center_drive = (
+                    center_drive * F_drive + center_contact * C_drive
                 ) / (F_drive + C_drive)
-                center_drive[1] = (
-                    center_drive[1] * F_drive + center_contact[1] * C_drive
-                ) / (F_drive + C_drive)
-                # print(f"主动轮接触力: {C_drive:.3g}N")
                 F_drive += C_drive
 
             if np.any(slave_film_param.h_cells <= 0):
                 contact_flag = True
-                C_slave, center_contact = self.slave_contact_solver.solve(slave_film_param)
-                center_slave[0] = (
-                    center_slave[0] * F_slave + center_contact[0] * C_slave
+                C_slave, center_contact = self.slave_contact_solver.solve(
+                    slave_film_param
+                )
+                center_slave = (
+                    center_slave * F_slave + center_contact * C_slave
                 ) / (F_slave + C_slave)
-                center_slave[1] = (
-                    center_slave[1] * F_slave + center_contact[1] * C_slave
-                ) / (F_slave + C_slave)
-                # print(f"从动轮接触力: {C_slave:.3g}N")
                 F_slave += C_slave
 
             # 2.3 动力学求解
-            F = np.array(
-                [0, 0, F_drive + F_slave - 2 * P_AIR]
-            )  # TODO: 加入齿腔油压和背压
+            F = np.array([0, 0, F_drive + F_slave])
             M_drive = np.cross(
                 [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_drive],
@@ -179,8 +171,10 @@ class SingleStepFSISolver:
                 [*center_slave, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_slave],
             )
-            M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
-            force_torque = ForceTorque(F=F, M=M)
+            M = M_drive + M_slave
+            force_torque = ForceTorque(
+                F=F + non_film_force_torque.F, M=M + non_film_force_torque.M
+            )
             state_calc = self.dynamics_solver.solve(
                 dt, state_prev, force_torque
             )
@@ -192,7 +186,7 @@ class SingleStepFSISolver:
             res_norm = np.linalg.norm(res_vec)
             if contact_flag:
                 # 若侧板和齿轮端面存在接触，放宽收敛判据
-                self.tol = base_tol * 100
+                self.tol = base_tol * 1000
             else:
                 self.tol = base_tol
             if res_norm < self.tol:
