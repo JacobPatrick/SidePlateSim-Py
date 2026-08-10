@@ -185,7 +185,7 @@ def main():
         new_state, solve_info = single_step_fsi_solver.solve(
             dt=dt_state["value"],
             state_prev=state,
-            force_torque=ForceTorque(F=F, M=M),
+            non_film_force_torque=ForceTorque(F=F, M=M),
         )
 
         if solve_info["success"]:
@@ -202,7 +202,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260805_5.txt", "a") as f:
+            with open("results/log/20260810_1.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
