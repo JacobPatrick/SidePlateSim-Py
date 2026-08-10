@@ -187,6 +187,9 @@ class ReynoldsSolver:
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
         F = np.sum(p * areas)
+        if abs(F) < 1e-8:
+            center = np.array([0.0, 0.0])
+            return F, center
         i = np.sum(p * centroids[:, 0] * areas) / F
         j = np.sum(p * centroids[:, 1] * areas) / F
         center = np.array([i, j])
