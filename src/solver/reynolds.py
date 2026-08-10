@@ -152,7 +152,7 @@ class ReynoldsSolver:
         h_cells = film_param.h_cells
         if np.any(h_cells <= 0):
             area = np.where(h_cells <= 0)[0].tolist()
-            p_contact = 1e5  # 碰撞区域压力固定为标准大气压
+            p_contact = 0 # 碰撞区域压力固定为标准大气压
             A_film, b_film = _process_contact_area(A, b, area, p_contact)
 
             p = []
@@ -164,9 +164,11 @@ class ReynoldsSolver:
                     p.append(p_contact)
                 else:
                     p.append(next(p_iter))
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
             F, center = self._calc_force(p)
         else:
             p = spsolve(A, b)
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
             F, center = self._calc_force(p)
 
         return Pressure(p=p, F=F, center=center)
