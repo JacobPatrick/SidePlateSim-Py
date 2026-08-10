@@ -11,20 +11,7 @@ class ReynoldsSolver:
     默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
-    def __init__(
-        self,
-        mesh: MeshInfo,
-        fluid_prop: FluidProp,
-    ):
-        """
-        Args:
-            mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
-            h_cells: 网格单元处的油膜厚度 (N,) [m]
-            mu: 动力粘度 [Pa·s]
-            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
-            ht_cells: 挤压速度场 (N,) [m/s]
-            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
-        """
+    def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
         self.mu = fluid_prop.mu
 
@@ -153,14 +140,36 @@ class ReynoldsSolver:
 
         self.equ = (A.tocsr(), b)
 
-    def solve(self, film_param: FilmParam) -> Pressure:
+    def solve(self, film_param: FilmParam):
         """
-        1. 求解线性系统 A * x = b，返回压力分布 p
+        1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
         2. 计算油膜压力 F 和作用点坐标 (i, j)
         """
         self._assemble_reynolds_fvm(film_param)
-        p = spsolve(self.equ[0], self.equ[1])
-        F, center = self._calc_force(p)
+        A, b = self.equ
+
+        # 检查是否存在碰撞
+        h_cells = film_param.h_cells
+        if np.any(h_cells <= 0):
+            area = np.where(h_cells <= 0)[0].tolist()
+            p_contact = 0 # 碰撞区域压力固定为标准大气压
+            A_film, b_film = _process_contact_area(A, b, area, p_contact)
+
+            p = []
+            p_film = spsolve(A_film, b_film)
+            p_iter = iter(p_film)
+            # 拼接得到完整齿轮端面区域压力场
+            for idx in range(len(h_cells)):
+                if idx in area:
+                    p.append(p_contact)
+                else:
+                    p.append(next(p_iter))
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
+            F, center = self._calc_force(p)
+        else:
+            p = spsolve(A, b)
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
+            F, center = self._calc_force(p)
 
         return Pressure(p=p, F=F, center=center)
 
@@ -178,6 +187,9 @@ class ReynoldsSolver:
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
         F = np.sum(p * areas)
+        if abs(F) < 1e-8:
+            center = np.array([0.0, 0.0])
+            return F, center
         i = np.sum(p * centroids[:, 0] * areas) / F
         j = np.sum(p * centroids[:, 1] * areas) / F
         center = np.array([i, j])
