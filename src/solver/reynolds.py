@@ -1,4 +1,5 @@
 import numpy as np
+from interface.types import FilmParam, FluidProp, Pressure
 from meshpy.triangle import MeshInfo
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
@@ -7,42 +8,24 @@ from scipy.sparse.linalg import spsolve
 class ReynoldsSolver:
     """
     Reynolds 方程求解器，基于单元中心有限体积法 (FVM)
+    默认求解油膜压力分布与总压力，可选求解流速场与泄漏流量
     """
 
-    def __init__(
-        self,
-        mesh: MeshInfo,
-        h_cells: np.ndarray,
-        mu: float,
-        U_cells: np.ndarray,
-        ht_cells: np.ndarray,
-        h_grad: tuple,
-        bc_lst: list = [],
-    ):
-        """
-        Args:
-            mesh: meshpy 生成的网格对象 (mesh.points, mesh.elements, mesh.facets, mesh.facet_markers)
-            h_cells: 网格单元处的油膜厚度 (N,) [m]
-            mu: 动力粘度 [Pa·s]
-            U_cells: 壁面相对速度向量场 (N, 2) [m/s]
-            ht_cells: 挤压速度场 (N,) [m/s]
-            bc_lst: 边界条件列表 [(facet_marker, pressure_value [Pa]), ...]，默认空列表表示无 Dirichlet 边界
-        """
+    def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
-        self.h_cells = h_cells
-        self.mu = mu
-        self.U_cells = U_cells
-        self.ht_cells = ht_cells
-        self.h_grad = h_grad
-        self.bc_lst = bc_lst
+        self.mu = fluid_prop.mu
 
         self.equ = ()
-        self.assemble_reynolds_fvm()
 
-    def assemble_reynolds_fvm(self):
+    def _assemble_reynolds_fvm(self, film_param: FilmParam):
         """
         组装 2D Reynolds 方程的稀疏矩阵与右端项
         """
+        h_cells = film_param.h_cells
+        U_cells = film_param.U_cells
+        ht_cells = film_param.ht_cells
+        h_grad = film_param.h_grad
+        bc_lst = film_param.bc_lst
         points = np.array(self.mesh.points)
         elements = np.array(self.mesh.elements)
         facets = np.array(self.mesh.facets)
@@ -58,7 +41,7 @@ class ReynoldsSolver:
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
         # 扩散系数 D = h^3 / (12μ)
-        D_cells = self.h_cells**3 / (12.0 * self.mu)
+        D_cells = h_cells**3 / (12.0 * self.mu)
 
         # 2. 构建面列表 (内部面 + 边界面)
         edge_to_cell = {}
@@ -71,7 +54,13 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
+                    faces.append(
+                        {
+                            "cells": (j, i),
+                            "nodes": key,
+                            "marker": 0,
+                        }
+                    )
                 else:
                     edge_to_cell[key] = i
 
@@ -96,10 +85,10 @@ class ReynoldsSolver:
         ), f"网格未闭合或 facets 不匹配，剩余 {len(edge_to_cell)} 条边"
 
         # 3. 稀疏矩阵组装
-        if not self.bc_lst:
+        if not bc_lst:
             raise ValueError("Dirichlet 边界必需，但 bc_lst 为空")
-        default_p = self.bc_lst[0]
-        bc_map = {idx: p_val for idx, p_val in enumerate(self.bc_lst)}
+        default_p = bc_lst[0]
+        bc_map = {idx: p_val for idx, p_val in enumerate(bc_lst)}
 
         A = lil_matrix((n_cells, n_cells))
         b = np.zeros(n_cells)
@@ -145,24 +134,46 @@ class ReynoldsSolver:
 
         # RHS
         for i in range(n_cells):
-            conv = 0.5 * (
-                self.U_cells[i, 0] * self.h_grad[0]
-                + self.U_cells[i, 1] * self.h_grad[1]
-            )
-            ht = self.ht_cells[i]
+            conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
+            ht = ht_cells[i]
             b[i] += (conv + ht) * areas[i]
 
         self.equ = (A.tocsr(), b)
 
-    def solve(self):
+    def solve(self, film_param: FilmParam):
         """
-        求解线性系统 A * x = b，返回压力分布 p
+        1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
+        2. 计算油膜压力 F 和作用点坐标 (i, j)
         """
-        p = spsolve(self.equ[0], self.equ[1])
+        self._assemble_reynolds_fvm(film_param)
+        A, b = self.equ
 
-        return p
+        # 检查是否存在碰撞
+        h_cells = film_param.h_cells
+        if np.any(h_cells <= 0):
+            area = np.where(h_cells <= 0)[0].tolist()
+            p_contact = 0 # 碰撞区域压力固定为标准大气压
+            A_film, b_film = _process_contact_area(A, b, area, p_contact)
 
-    def calc_force(self, p):
+            p = []
+            p_film = spsolve(A_film, b_film)
+            p_iter = iter(p_film)
+            # 拼接得到完整齿轮端面区域压力场
+            for idx in range(len(h_cells)):
+                if idx in area:
+                    p.append(p_contact)
+                else:
+                    p.append(next(p_iter))
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
+            F, center = self._calc_force(p)
+        else:
+            p = spsolve(A, b)
+            p = np.array(np.clip(p, 0.0, None)) # 负压截断
+            F, center = self._calc_force(p)
+
+        return Pressure(p=p, F=F, center=center)
+
+    def _calc_force(self, p):
         """
         根据压力分布求油膜压力
         """
@@ -178,10 +189,11 @@ class ReynoldsSolver:
         F = np.sum(p * areas)
         i = np.sum(p * centroids[:, 0] * areas) / F
         j = np.sum(p * centroids[:, 1] * areas) / F
+        center = np.array([i, j])
 
-        return F, (i, j)
+        return F, center
 
-    def calc_flow(self, p):
+    def _calc_flow(self, p, film_param: FilmParam):
         """
         根据压力场求流速场
         """
@@ -189,9 +201,11 @@ class ReynoldsSolver:
         px, py = self._calc_pressure_grediant(p)
 
         # 2. 根据压力梯度求流速
-        h2 = self.h_cells * self.h_cells
-        average_u = -(h2 * px) / (12 * self.mu) + 0.5 * self.U_cells[:, 0]
-        average_v = -(h2 * py) / (12 * self.mu) + 0.5 * self.U_cells[:, 1]
+        h_cells = film_param.h_cells
+        U_cells = film_param.U_cells
+        h2 = h_cells * h_cells
+        average_u = -(h2 * px) / (12 * self.mu) + 0.5 * U_cells[:, 0]
+        average_v = -(h2 * py) / (12 * self.mu) + 0.5 * U_cells[:, 1]
 
         return average_u, average_v
 
@@ -275,10 +289,12 @@ class ReynoldsSolver:
 
         return px, py
 
-    def calc_leakage(self, p):
+    def calc_leakage(self, p, film_param: FilmParam):
         """
         求齿槽向端面的泄漏流量
         """
+        h_cells = film_param.h_cells
+
         points = np.array(self.mesh.points)
         elements = np.array(self.mesh.elements)
         facets = np.array(self.mesh.facets)
@@ -293,7 +309,13 @@ class ReynoldsSolver:
                 key = (min(n1, n2), max(n1, n2))
                 if key in edge_to_cell:
                     j = edge_to_cell.pop(key)
-                    faces.append({"cells": (j, i), "nodes": key, "marker": 0})
+                    faces.append(
+                        {
+                            "cells": (j, i),
+                            "nodes": key,
+                            "marker": 0,
+                        }
+                    )
                 else:
                     edge_to_cell[key] = i
 
@@ -311,7 +333,7 @@ class ReynoldsSolver:
                     }
                 )
 
-        local_u, local_v = self.calc_flow(p)
+        local_u, local_v = self._calc_flow(p)
 
         leak_rate = []
 
@@ -327,7 +349,31 @@ class ReynoldsSolver:
             normal = np.array([edge_vec[1], -edge_vec[0]]) / length
 
             u_vec = np.array([local_u[i], local_v[i]])
-            flow_rate = -np.dot(u_vec, normal) * length * self.h_cells[i]
+            flow_rate = -np.dot(u_vec, normal) * length * h_cells[i]
             leak_rate.append(flow_rate)
 
         return leak_rate
+
+
+def _process_contact_area(A: np.ndarray, b: np.ndarray, S: list, x0: float):
+    """
+    处理侧板和齿轮端面接触区域的油膜，将压力固定为常数，并作为其余部分的边界条件继续求解
+    """
+    n = A.shape[0]
+    S = np.array(S)
+
+    # 获取补集索引 (S^c)
+    S_comp = np.setdiff1d(np.arange(n), S)
+
+    # 删除 S 对应的行，得到欠定方程组 A'x = b'
+    A_prime = A[S_comp, :]
+    b_prime = b[S_comp]
+
+    # 计算移项后的常数项 b_tilde
+    Ap = np.asarray(x0 * np.sum(A_prime[:, S], axis=1))
+    b_tilde = b_prime - Ap.squeeze()
+
+    # 提取 A_tilde，即 A' 中删除 S 对应的列
+    A_tilde = A_prime[:, S_comp]
+
+    return A_tilde.tocsr(), b_tilde
