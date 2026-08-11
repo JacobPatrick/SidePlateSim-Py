@@ -198,6 +198,7 @@ class SingleStepFSISolver:
                     'res_norm': res_norm,
                     'F_drive': F_drive,
                     'F_slave': F_slave,
+                    'M': M,
                     'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
                 }
                 return state_pred, solve_info
@@ -226,6 +227,7 @@ class SingleStepFSISolver:
                 'res_norm': res_norm,
                 'F_drive': F_drive,
                 'F_slave': F_slave,
+                'M': M,
                 'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
             }
 
