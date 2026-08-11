@@ -9,9 +9,7 @@ from src.config.config import load_config
 from interface.types import (
     GearProfilePath,
     SidePlateState,
-    FilmParam,
     FluidProp,
-    Pressure,
     SidePlateMassProp,
     ForceTorque,
 )
@@ -107,64 +105,17 @@ def main():
         drive_film_param = calc_film_params(
             drive_mesh, state, drive_p_lst, omega, "drive"
         )
-        slave_film_param = calc_film_params(
-            slave_mesh, state, slave_p_lst, omega, "slave"
-        )
 
-        # 3.1 求解油膜压力
+        # 3.1 初始化 Reynolds 求解器、接触求解器和 FSI 求解器
         fluid_prop = FluidProp(mu=oil_mu)
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
 
-        drive_pressure = drive_reynolds_solver.solve(drive_film_param)
-        slave_pressure = slave_reynolds_solver.solve(slave_film_param)
-
-        p_drive = drive_pressure.p
-        p_slave = slave_pressure.p
-        F_drive = drive_pressure.F
-        F_slave = slave_pressure.F
-        center_drive = drive_pressure.center
-        center_slave = slave_pressure.center
-
-        # 3.2 求解接触力（如有）
         drive_contact_solver = ContactSolver(drive_mesh, k=1e14, c=1e8)
         slave_contact_solver = ContactSolver(slave_mesh, k=1e14, c=1e8)
-        if np.any(drive_film_param.h_cells <= 0):
-            C_drive, center_contact = drive_contact_solver.solve(drive_film_param)
-            center_drive[0] = (
-                center_drive[0] * F_drive + center_contact[0] * C_drive
-            ) / (F_drive + C_drive)
-            center_drive[1] = (
-                center_drive[1] * F_drive + center_contact[1] * C_drive
-            ) / (F_drive + C_drive)
-            print(f"主动轮接触力: {C_drive:.2f}N")
-            F_drive += C_drive
 
-        if np.any(slave_film_param.h_cells <= 0):
-            C_slave, center_contact = slave_contact_solver.solve(slave_film_param)
-            center_slave[0] = (
-                center_slave[0] * F_slave + center_contact[0] * C_slave
-            ) / (F_slave + C_slave)
-            center_slave[1] = (
-                center_slave[1] * F_slave + center_contact[1] * C_slave
-            ) / (F_slave + C_slave)
-            print(f"从动轮接触力: {C_slave:.2f}N")
-            F_slave += C_slave
-
-        # 4. 求解正向动力学
-        F = np.array(
-            [0, 0, F_drive + F_slave]
-        )  # TODO: 加入齿腔油压和背压
-        f = F[2] - m * 9.81
-        M_drive = np.cross(
-            side_plate_mass_prop.barycenter - [*center_drive, 0],
-            [0, 0, F_drive],
-        )
-        M_slave = np.cross(
-            side_plate_mass_prop.barycenter - [*center_slave, 0],
-            [0, 0, F_slave],
-        )
-        M = M_drive + M_slave  # TODO: 加入齿腔油压产生的力矩
+        F = np.array([0, 0, 0])
+        M = np.array([0, 0, 0])
 
         single_step_fsi_solver = SingleStepFSISolver(
             drive_mesh=drive_mesh,
@@ -182,6 +133,7 @@ def main():
             tol=1e-4,
         )
 
+        # 3.2 单步 FSI 求解
         new_state, solve_info = single_step_fsi_solver.solve(
             dt=dt_state["value"],
             state_prev=state,
@@ -202,14 +154,15 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260810_1.txt", "a") as f:
+            with open("results/log/20260811_2.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
                 )
                 f.write(
-                    f"油膜力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
+                    f"侧板受力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
                 )
+                f.write(f"侧板受合力矩: M={solve_info['M']}N·m\n")
                 f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
                 f.write(
                     f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"

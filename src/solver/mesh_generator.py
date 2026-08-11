@@ -1,13 +1,6 @@
 import numpy as np
-from interface.types import (
-    GearProfilePath,
-    SidePlateState,
-)
-from utils.math_tools import quaternion_to_euler
-from utils.load_geometry import (
-    load_geometry_from_dxf,
-    load_gear_profile_from_dxf,
-)
+from interface.types import GearProfilePath
+from utils.load_geometry import load_gear_profile_from_dxf
 from utils.geo_trans import (
     boolean_operation,
     transform_operation,
@@ -33,7 +26,7 @@ class MeshGenerator:
         ], "警告: 齿轮类型必须是 'drive' 或 'slave'"
         self.gear_type = gear_type
 
-    def solve(self, t, p_lst, state: SidePlateState):
+    def solve(self, t, p_lst,):
         # 1. 导入齿轮轮廓
         gear_poly = load_gear_profile_from_dxf(
             self.gear_profile_path.gear_poly_path
@@ -66,7 +59,7 @@ class MeshGenerator:
             rotated = transform_operation(
                 translated,
                 transform="rotate",
-                rotate_param=(np.radians(deg), SLAVE_GEAR_CENTER),
+                rotate_param=(np.radians(deg - 4), SLAVE_GEAR_CENTER),  # TODO: 修正导入的齿转角
             )
         # TODO: 暂时不考虑油槽区域
         # relief_poly = load_geometry_from_dxf(
