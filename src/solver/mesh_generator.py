@@ -63,7 +63,7 @@ class MeshGenerator:
             rotated = transform_operation(
                 translated,
                 transform="rotate",
-                rotate_param=(np.radians(deg), SLAVE_GEAR_CENTER),
+                rotate_param=(np.radians(deg - 4), SLAVE_GEAR_CENTER),
             )
         # TODO: 暂时不考虑油槽区域
         # relief_poly = load_geometry_from_dxf(

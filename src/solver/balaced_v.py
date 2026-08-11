@@ -12,7 +12,6 @@ from utils.math_tools import quaternion_to_euler
 DRIVE_GEAR_CENTER = (0.0305, 0)
 SLAVE_GEAR_CENTER = (-0.0305, 0)
 GEAR_RADIUS = 0.035
-P_AIR = 1e5 * 0.0024687143080106173
 
 
 def solve_va_vb_vc(vz, wx, wy, roll, pitch):
@@ -123,7 +122,7 @@ class BalancedVSolver:
         center_drive = drive_pressure.center
         center_slave = slave_pressure.center
 
-        F = np.array([0, 0, F_drive + F_slave - 2 * P_AIR])
+        F = np.array([0, 0, F_drive + F_slave])
         M_drive = np.cross(
             [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
             [0, 0, F_drive],
