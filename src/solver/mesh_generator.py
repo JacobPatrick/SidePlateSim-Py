@@ -26,7 +26,11 @@ class MeshGenerator:
         ], "警告: 齿轮类型必须是 'drive' 或 'slave'"
         self.gear_type = gear_type
 
-    def solve(self, t, p_lst,):
+    def solve(
+        self,
+        t,
+        p_lst,
+    ):
         # 1. 导入齿轮轮廓
         gear_poly = load_gear_profile_from_dxf(
             self.gear_profile_path.gear_poly_path
@@ -59,7 +63,10 @@ class MeshGenerator:
             rotated = transform_operation(
                 translated,
                 transform="rotate",
-                rotate_param=(np.radians(deg - 4), SLAVE_GEAR_CENTER),  # TODO: 修正导入的齿转角
+                rotate_param=(
+                    np.radians(deg - 4),
+                    SLAVE_GEAR_CENTER,
+                ),  # TODO: 修正导入的齿转角
             )
         # TODO: 暂时不考虑油槽区域
         # relief_poly = load_geometry_from_dxf(

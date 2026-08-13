@@ -24,6 +24,11 @@ from utils.calc_film_params import calc_film_params
 from utils.math_tools import euler_to_quaternion
 
 
+def smooth_loading(t, load):
+    ratio = np.clip(t / 1e-2, 0, 1)
+    return ratio * load
+
+
 def main():
     # 1. 读取配置文件，计算固定的参数
     params = load_config('SimParams_2')
@@ -57,7 +62,7 @@ def main():
     dt_state = {"value": base_dt}
 
     t = 0.0
-    z, roll, pitch = 3e-05, 0.0, 0.0
+    z, roll, pitch = 3e-05, -2.575e-5, 0.0
     q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
         p=np.array([0.0, 0.0, z]),
@@ -65,6 +70,12 @@ def main():
         q=np.array(q),
         w=np.array([0.0, 0.0, 0.0]),
     )
+    # state = SidePlateState(
+    #     p=np.array([0.0, 0.0, 9.5928455e-06]),
+    #     v=np.array([0.0, 0.0, 3.59847652e-05]),
+    #     q=np.array([1.00000000e+00, 5.22188676e-08, 5.18494502e-07, 1.99415846e-14]),
+    #     w=np.array([-3.06458670e-06, -1.81265649e-05, 0.0])
+    # )
 
     mock_lpm = MockLPM()
     drive_gear_profile_path = GearProfilePath(
@@ -91,16 +102,18 @@ def main():
     new_state = None
     dt_state["value"] = base_dt
 
+    F_balance = 10600.0
+
     while t < total_time:
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
         # 2. 网格划分与油膜参数求解
         drive_mesh = drive_mesh_generator.solve(
-            t=t, p_lst=drive_p_lst, state=state
+            t=t, p_lst=drive_p_lst
         )
         slave_mesh = slave_mesh_generator.solve(
-            t=t, p_lst=slave_p_lst, state=state
+            t=t, p_lst=slave_p_lst
         )
         drive_film_param = calc_film_params(
             drive_mesh, state, drive_p_lst, omega, "drive"
@@ -114,7 +127,7 @@ def main():
         drive_contact_solver = ContactSolver(drive_mesh, k=1e14, c=1e8)
         slave_contact_solver = ContactSolver(slave_mesh, k=1e14, c=1e8)
 
-        F = np.array([0, 0, 0])
+        F = np.array([0, 0, F_balance])
         M = np.array([0, 0, 0])
 
         single_step_fsi_solver = SingleStepFSISolver(
@@ -129,8 +142,8 @@ def main():
             slave_contact_solver=slave_contact_solver,
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
-            max_sub_iter=20,
-            tol=1e-4,
+            max_sub_iter=10,
+            tol=1,
         )
 
         # 3.2 单步 FSI 求解
@@ -154,7 +167,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260811_2.txt", "a") as f:
+            with open("results/log/20260813_2.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
@@ -179,6 +192,20 @@ def main():
             )
 
     # 4. 可视化最终状态下油膜压力分布
+    drive_p_lst, slave_p_lst = mock_lpm.solve(t)
+
+    drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
+    slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
+    drive_film_param = calc_film_params(drive_mesh, state, drive_p_lst, omega, "drive")
+    slave_film_param = calc_film_params(slave_mesh, state, slave_p_lst, omega, "slave")
+
+    drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
+    slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
+    drive_pressure = drive_reynolds_solver.solve(drive_film_param)
+    slave_pressure = slave_reynolds_solver.solve(slave_film_param)
+    p_drive = drive_pressure.p
+    p_slave = slave_pressure.p
+
     plot_gear_pressure_distribution(
         drive_mesh, p_drive, slave_mesh, p_slave, fig_name="p_dist", mode='save'
     )
