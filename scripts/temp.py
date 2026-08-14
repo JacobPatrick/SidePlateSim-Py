@@ -61,21 +61,21 @@ def main():
     )
     dt_state = {"value": base_dt}
 
-    t = 0.0
-    z, roll, pitch = 3e-05, -2.575e-5, 0.0
-    q = euler_to_quaternion(roll, pitch, 0.0)
-    state = SidePlateState(
-        p=np.array([0.0, 0.0, z]),
-        v=np.array([0.0, 0.0, 0.0]),
-        q=np.array(q),
-        w=np.array([0.0, 0.0, 0.0]),
-    )
+    t = 0.4735 * 1e-3
+    # z, roll, pitch = 4e-05, -2.575e-4, 0.0
+    # q = euler_to_quaternion(roll, pitch, 0.0)
     # state = SidePlateState(
-    #     p=np.array([0.0, 0.0, 9.5928455e-06]),
-    #     v=np.array([0.0, 0.0, 3.59847652e-05]),
-    #     q=np.array([1.00000000e+00, 5.22188676e-08, 5.18494502e-07, 1.99415846e-14]),
-    #     w=np.array([-3.06458670e-06, -1.81265649e-05, 0.0])
+    #     p=np.array([0.0, 0.0, z]),
+    #     v=np.array([0.0, 0.0, 0.0]),
+    #     q=np.array(q),
+    #     w=np.array([0.0, 0.0, 0.0]),
     # )
+    state = SidePlateState(
+        p=np.array([0.0, 0.0, 0.00011651]),
+        v=np.array([0.0, 0.0, 0.44822267]),
+        q=np.array([9.99998725e-01, -1.59361136e-03, 9.83535927e-05, 3.35762517e-08]),
+        w=np.array([-10.61498416, 0.50256712, 0.0])
+    )
 
     mock_lpm = MockLPM()
     drive_gear_profile_path = GearProfilePath(
@@ -124,8 +124,8 @@ def main():
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
 
-        drive_contact_solver = ContactSolver(drive_mesh, k=1e14, c=1e8)
-        slave_contact_solver = ContactSolver(slave_mesh, k=1e14, c=1e8)
+        drive_contact_solver = ContactSolver(drive_mesh, k=1e17, c=1e10)
+        slave_contact_solver = ContactSolver(slave_mesh, k=1e17, c=1e10)
 
         F = np.array([0, 0, -F_balance])
         M = np.array([0, 0, 0])
@@ -143,7 +143,7 @@ def main():
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
             max_sub_iter=10,
-            tol=1,
+            tol=1e-1,
         )
 
         # 3.2 单步 FSI 求解
@@ -167,8 +167,8 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260814_1.txt", "a") as f:
-                f.write(f"时间: {t*1000:.3f}ms\n")
+            with open("results/log/20260814_2.txt", "a") as f:
+                f.write(f"时间: {t*1000:.4f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
                 )

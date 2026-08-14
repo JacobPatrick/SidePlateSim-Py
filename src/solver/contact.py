@@ -1,5 +1,5 @@
 import numpy as np
-from interface.types import FilmParam
+from interface.types import FilmParam, Pressure
 from meshpy.triangle import MeshInfo
 
 
@@ -19,7 +19,7 @@ class ContactSolver:
         self.k = k
         self.c = c
 
-    def solve(self, film_param: FilmParam):
+    def solve(self, film_param: FilmParam) -> Pressure:
         """
         求解接触力与接触力等效作用点
         """
@@ -58,4 +58,4 @@ class ContactSolver:
         j = np.sum(p * centroids[:, 1] * areas) / F
         center = np.array([i, j])
 
-        return F, center
+        return Pressure(p=p, F=F, center=center)
