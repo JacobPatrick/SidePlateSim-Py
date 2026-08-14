@@ -166,7 +166,7 @@ class SingleStepFSISolver:
                 F_slave += C_slave
 
             # 2.3 动力学求解
-            F = np.array([0, 0, F_drive + F_slave])
+            F = np.array([0, 0, F_drive + F_slave + non_film_force_torque.F[2]])
             M_drive = np.cross(
                 [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_drive],
@@ -175,10 +175,8 @@ class SingleStepFSISolver:
                 [*center_slave, 0] - self.side_plate_mass_prop.barycenter,
                 [0, 0, F_slave],
             )
-            M = M_drive + M_slave
-            force_torque = ForceTorque(
-                F=F + non_film_force_torque.F, M=M + non_film_force_torque.M
-            )
+            M = M_drive + M_slave + non_film_force_torque.M
+            force_torque = ForceTorque(F=F, M=M)
             state_calc = self.dynamics_solver.solve(
                 dt, state_prev, force_torque
             )
@@ -203,7 +201,7 @@ class SingleStepFSISolver:
                     'F_drive': F_drive,
                     'F_slave': F_slave,
                     'M': M,
-                    'F_side_plate': F[2] + non_film_force_torque.F[2],
+                    'F_side_plate': F[2],
                 }
                 return state_pred, solve_info
 
@@ -232,7 +230,7 @@ class SingleStepFSISolver:
                 'F_drive': F_drive,
                 'F_slave': F_slave,
                 'M': M,
-                'F_side_plate': F[2] + non_film_force_torque.F[2],
+                'F_side_plate': F[2],
             }
 
             return state_pred, solve_info
