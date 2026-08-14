@@ -62,7 +62,7 @@ def main():
     dt_state = {"value": base_dt}
 
     t = 0.0
-    z, roll, pitch = 3e-05, -2.575e-5, 0.0
+    z, roll, pitch = 2e-05, -2.575e-5, 0.0
     q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
         p=np.array([0.0, 0.0, z]),
@@ -96,7 +96,8 @@ def main():
     new_state = None
     dt_state["value"] = base_dt
 
-    F_balance = 10600.0
+    F_balance = 6.3e3
+    M_balance = 90
 
     while t < total_time:
         # 1. 集中参数法求齿腔压力
@@ -114,11 +115,12 @@ def main():
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
 
-        drive_contact_solver = ContactSolver(drive_mesh, k=1e16, c=1e9)
-        slave_contact_solver = ContactSolver(slave_mesh, k=1e16, c=1e9)
+
+        drive_contact_solver = ContactSolver(drive_mesh, k=1e17, c=1e10)
+        slave_contact_solver = ContactSolver(slave_mesh, k=1e17, c=1e10)
 
         F = np.array([0, 0, -F_balance])
-        M = np.array([0, 0, 0])
+        M = np.array([M_balance, 0, 0])
 
         single_step_fsi_solver = SingleStepFSISolver(
             drive_mesh=drive_mesh,
@@ -157,7 +159,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260814_1.txt", "a") as f:
+            with open("results/log/20260814_4.txt", "a") as f:
                 f.write(f"时间: {t*1000:.4f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
