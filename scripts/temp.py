@@ -127,7 +127,7 @@ def main():
         drive_contact_solver = ContactSolver(drive_mesh, k=1e14, c=1e8)
         slave_contact_solver = ContactSolver(slave_mesh, k=1e14, c=1e8)
 
-        F = np.array([0, 0, F_balance])
+        F = np.array([0, 0, -F_balance])
         M = np.array([0, 0, 0])
 
         single_step_fsi_solver = SingleStepFSISolver(
@@ -167,7 +167,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260813_2.txt", "a") as f:
+            with open("results/log/20260814_1.txt", "a") as f:
                 f.write(f"时间: {t*1000:.3f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
@@ -194,8 +194,8 @@ def main():
     # 4. 可视化最终状态下油膜压力分布
     drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
-    drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst, state=state)
-    slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst, state=state)
+    drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
+    slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
     drive_film_param = calc_film_params(drive_mesh, state, drive_p_lst, omega, "drive")
     slave_film_param = calc_film_params(slave_mesh, state, slave_p_lst, omega, "slave")
 
