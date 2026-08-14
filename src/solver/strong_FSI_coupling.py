@@ -199,7 +199,7 @@ class SingleStepFSISolver:
                     'F_drive': F_drive,
                     'F_slave': F_slave,
                     'M': M,
-                    'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
+                    'F_side_plate': F[2] + non_film_force_torque.F[2],
                 }
                 return state_pred, solve_info
 
@@ -228,7 +228,7 @@ class SingleStepFSISolver:
                 'F_drive': F_drive,
                 'F_slave': F_slave,
                 'M': M,
-                'F_side_plate': F[2] - self.side_plate_mass_prop.m * 9.81,
+                'F_side_plate': F[2] + non_film_force_torque.F[2],
             }
 
             return state_pred, solve_info

@@ -43,7 +43,6 @@ class ForwardDynamicsSolver:
         """
         m = self.m
         Ic = self.Ic
-        g_vec = self.g_vec
 
         # 使用 copy 避免污染原始状态
         p = state.p.copy()
@@ -60,9 +59,8 @@ class ForwardDynamicsSolver:
         R = quaternion_to_rotation_matrix(q)
 
         # 2. 所受合力
-        G = np.array([m * i for i in g_vec])
         F_inertial = R @ force_torque.F  # 转换到惯性系
-        F_total = G + F_inertial
+        F_total = F_inertial  # 不考虑重力影响
 
         # 3. 求解加速度 (牛顿-欧拉方程)
         a_c = (F_total / m) * self.trans_mask
