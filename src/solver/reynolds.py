@@ -88,7 +88,7 @@ class ReynoldsSolver:
         if not bc_lst:
             raise ValueError("Dirichlet 边界必需，但 bc_lst 为空")
         default_p = bc_lst[0]
-        bc_map = {idx: p_val for idx, p_val in enumerate(bc_lst)}
+        bc_map = {idx + 1: p_val for idx, p_val in enumerate(bc_lst)}
 
         A = lil_matrix((n_cells, n_cells))
         b = np.zeros(n_cells)

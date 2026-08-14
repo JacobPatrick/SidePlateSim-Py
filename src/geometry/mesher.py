@@ -113,7 +113,7 @@ def shapely_to_meshpy(
             # 向量化计算到所有边界顶点的距离
             dists = np.linalg.norm(ext_arr - coord_arr, axis=1)
             nearest_idx = int(np.argmin(dists))
-            splits.append((nearest_idx, int(m_id) + 1))
+            splits.append((nearest_idx, int(m_id) + 2))
 
             # if dists[nearest_idx] > min_edge_length * 3:
             #     print(f"警告: 标记点{m_id}：{coord}距离边界顶点过远")
@@ -169,7 +169,7 @@ def shapely_to_meshpy(
         n_int = len(int_clean)
         for i in range(n_int):
             all_facets.append([start_idx + i, start_idx + (i + 1) % n_int])
-            facet_markers.append(0)  # 内孔边界标记为 0
+            facet_markers.append(1)  # 内孔边界标记为 1
 
         # 孔定位点： Triangle 依赖此点识别空洞区域
         holes.append([interior.centroid.x, interior.centroid.y])
