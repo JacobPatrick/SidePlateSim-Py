@@ -140,7 +140,7 @@ class ReynoldsSolver:
 
         self.equ = (A.tocsr(), b)
 
-    def solve(self, film_param: FilmParam):
+    def solve(self, film_param: FilmParam) -> Pressure:
         """
         1. 求解线性系统 A * x = b，返回压力分布 p（若有碰撞，进行额外处理）
         2. 计算油膜压力 F 和作用点坐标 (i, j)

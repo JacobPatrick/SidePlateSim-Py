@@ -143,9 +143,11 @@ class SingleStepFSISolver:
             # 2.2 接触力求解
             if np.any(drive_film_param.h_cells <= 0):
                 contact_flag = True
-                C_drive, center_contact = self.drive_contact_solver.solve(
+                calc_drive_contact = self.drive_contact_solver.solve(
                     drive_film_param
                 )
+                C_drive = calc_drive_contact.F
+                center_contact = calc_drive_contact.center
                 center_drive = (
                     center_drive * F_drive + center_contact * C_drive
                 ) / (F_drive + C_drive)
@@ -153,9 +155,11 @@ class SingleStepFSISolver:
 
             if np.any(slave_film_param.h_cells <= 0):
                 contact_flag = True
-                C_slave, center_contact = self.slave_contact_solver.solve(
+                calc_slave_contact = self.slave_contact_solver.solve(
                     slave_film_param
                 )
+                C_slave = calc_slave_contact.F
+                center_contact = calc_slave_contact.center
                 center_slave = (
                     center_slave * F_slave + center_contact * C_slave
                 ) / (F_slave + C_slave)
