@@ -148,7 +148,7 @@ def plot_pressure_distribution(
 
 
 def plot_gear_pressure_distribution(
-    mesh1, p1, mesh2, p2, fig_name, contour="True", mode="save"
+    mesh1, p1, mesh2, p2, fig_name, contour="False", mode="save"
 ):
     points1 = np.array(mesh1.points)
     elements1 = np.array(mesh1.elements)

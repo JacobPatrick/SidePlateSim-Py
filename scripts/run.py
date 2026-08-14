@@ -70,7 +70,7 @@ def main():
         q=np.array(q),
         w=np.array([0.0, 0.0, 0.0]),
     )
-    
+
     mock_lpm = MockLPM()
     drive_gear_profile_path = GearProfilePath(
         gear_poly_path="assets/drive_gear.DXF",
@@ -103,12 +103,8 @@ def main():
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
 
         # 2. 网格划分与油膜参数求解
-        drive_mesh = drive_mesh_generator.solve(
-            t=t, p_lst=drive_p_lst
-        )
-        slave_mesh = slave_mesh_generator.solve(
-            t=t, p_lst=slave_p_lst
-        )
+        drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
+        slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
         drive_film_param = calc_film_params(
             drive_mesh, state, drive_p_lst, omega, "drive"
         )
@@ -190,8 +186,12 @@ def main():
 
     drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
     slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
-    drive_film_param = calc_film_params(drive_mesh, state, drive_p_lst, omega, "drive")
-    slave_film_param = calc_film_params(slave_mesh, state, slave_p_lst, omega, "slave")
+    drive_film_param = calc_film_params(
+        drive_mesh, state, drive_p_lst, omega, "drive"
+    )
+    slave_film_param = calc_film_params(
+        slave_mesh, state, slave_p_lst, omega, "slave"
+    )
 
     drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
     slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
