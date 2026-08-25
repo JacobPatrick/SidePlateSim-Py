@@ -61,7 +61,7 @@ def main():
     )
     dt_state = {"value": base_dt}
 
-    t = 0.5586 * 1e-3
+    t = 36.6692 * 1e-3
     # z, roll, pitch = 4e-05, -2.575e-4, 0.0
     # q = euler_to_quaternion(roll, pitch, 0.0)
     # state = SidePlateState(
@@ -71,10 +71,10 @@ def main():
     #     w=np.array([0.0, 0.0, 0.0]),
     # )
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 0.00012632]),
-        v=np.array([0.0, 0.0, 0.45155671]),
-        q=np.array([9.99998338e-01, -1.82306779e-03, -1.31910535e-05, 4.60761862e-09]),
-        w=np.array([-12.83049135, -0.62430307, 0.0])
+        p=np.array([0.0, 0.0, 4.53390188e-06]),
+        v=np.array([0.0, 0.0, -5.77890492e-05]),
+        q=np.array([1.00000000e+00, 5.40188252e-06, 1.91534301e-07, -1.73232150e-11]),
+        w=np.array([0.0014692, 0.00135047, 0.0])
     )
 
     mock_lpm = MockLPM()
@@ -102,8 +102,8 @@ def main():
     new_state = None
     dt_state["value"] = base_dt
 
-    F_balance = 6.3e3
-    M_balance = 90
+    F_balance = 6.5e3
+    M_balance = 92.0
 
     while t < total_time:
         # 1. 集中参数法求齿腔压力
@@ -129,7 +129,7 @@ def main():
         slave_contact_solver = ContactSolver(slave_mesh, k=1e17, c=1e10)
 
         F = np.array([0, 0, -F_balance])
-        M = np.array([0, 0, M_balance])
+        M = np.array([M_balance, 0, 0])
 
         single_step_fsi_solver = SingleStepFSISolver(
             drive_mesh=drive_mesh,
@@ -144,7 +144,7 @@ def main():
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
             max_sub_iter=10,
-            tol=1e-3,
+            tol=1e-2,
         )
 
         # 3.2 单步 FSI 求解
@@ -168,7 +168,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260814_4.txt", "a") as f:
+            with open("results/log/20260815_6.txt", "a") as f:
                 f.write(f"时间: {t*1000:.4f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
