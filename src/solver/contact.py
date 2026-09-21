@@ -37,11 +37,12 @@ class ContactSolver:
             areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
 
         p = np.zeros(n_cells)
-        for cell_idx in contact_cells:
-            h = h_cells[cell_idx]
-            ht = ht_cells[cell_idx]
-            force_magnitude = -self.k * h - self.c * ht
-            p[cell_idx] = force_magnitude
+        contact_pressure = (
+            -self.k * h_cells[contact_cells]
+            - self.c * ht_cells[contact_cells]
+        )
+        # 单边接触只能产生压力，不能产生拉力。
+        p[contact_cells] = np.maximum(contact_pressure, 0.0)
 
         F = np.sum(p * areas)
 
@@ -50,9 +51,13 @@ class ContactSolver:
             f"接触面积: {contact_area * 1e6:.3g}mm^2, 最大穿透深度: {-np.min(h_cells[contact_cells]) * 1e6:.3g}mu m, 接触力: {F:.3g}N"
         )
 
-        # 若阻尼力大于弹力，截断，避免出现负接触力
+        # 即使接触区域正在分离，也保持返回类型稳定。
         if F <= 1e-8:
-            return 0.0, (0.0, 0.0)
+            return Pressure(
+                p=p,
+                F=0.0,
+                center=np.array([0.0, 0.0]),
+            )
 
         i = np.sum(p * centroids[:, 0] * areas) / F
         j = np.sum(p * centroids[:, 1] * areas) / F

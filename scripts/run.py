@@ -135,7 +135,7 @@ def main():
             dynamics_solver=forward_dynamics_solver,
             side_plate_mass_prop=side_plate_mass_prop,
             max_sub_iter=10,
-            tol=1e-1,
+            tol=1.0,
         )
 
         # 3.2 单步 FSI 求解
