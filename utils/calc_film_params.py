@@ -6,70 +6,61 @@ DRIVE_GEAR_CENTER = (0.0305, 0)
 SLAVE_GEAR_CENTER = (-0.0305, 0)
 
 
+class FilmParameterCalculator:
+    """缓存固定网格量，并为不同侧板预测状态计算油膜参数。"""
+
+    def __init__(self, mesh, p_lst, omega, gear_type):
+        if gear_type not in {"drive", "slave"}:
+            raise ValueError("gear_type 必须是 'drive' 或 'slave'")
+
+        points = np.asarray(mesh.points)
+        elements = np.asarray(mesh.elements, dtype=int)
+        centroids = np.mean(points[elements], axis=1)
+        self.x = centroids[:, 0]
+        self.y = centroids[:, 1]
+        self.ones = np.ones(len(centroids))
+
+        if gear_type == "drive":
+            self.U_cells = np.column_stack(
+                (-omega * self.y, omega * (self.x - DRIVE_GEAR_CENTER[0]))
+            )
+        else:
+            self.U_cells = np.column_stack(
+                (omega * self.y, -omega * (self.x - SLAVE_GEAR_CENTER[0]))
+            )
+
+        self.bc_lst = [p_lst[0], *(p_val for _, p_val in p_lst[1:])]
+
+    def solve(self, state: SidePlateState) -> FilmParam:
+        roll, pitch, _ = quaternion_to_euler(*state.q)
+
+        # 1. 单元中心膜厚与膜厚梯度。
+        sin_pitch = np.sin(pitch)
+        sin_roll = np.sin(roll)
+        h_cells = (
+            -sin_pitch * self.x
+            + sin_roll * self.y
+            + state.p[2] * self.ones
+        )
+        h_grad = (-sin_pitch, sin_roll)
+
+        # 2. 两表面相互远离时挤压速度为正。
+        ht_cells = (
+            state.v[2] * self.ones
+            + np.cos(roll) * state.w[0] * self.y
+            - np.cos(pitch) * state.w[1] * self.x
+        )
+
+        return FilmParam(
+            h_cells=h_cells,
+            h_grad=h_grad,
+            U_cells=self.U_cells,
+            ht_cells=ht_cells,
+            bc_lst=self.bc_lst,
+        )
+
+
 def calc_film_params(mesh, state: SidePlateState, p_lst, omega, gear_type):
-    """
-    根据给定的网格、侧板状态和齿轮参数，计算油膜参数表
-    """
-    points = np.array(mesh.points)
-    elements = np.array(mesh.elements)
-    centroids = np.mean(points[elements], axis=1)
+    """一次性计算油膜参数；FSI 子迭代应复用 FilmParameterCalculator。"""
 
-    roll, pitch, _ = quaternion_to_euler(*state.q)
-
-    # 1. 计算节点处的油膜厚度
-    h_cells = (
-        -np.sin(pitch) * np.array([point[0] for point in centroids])
-        + np.sin(roll) * np.array([point[1] for point in centroids])
-        + state.p[2] * np.ones(len(centroids))
-    )
-    # 非负检查
-    # if np.any(h_cells <= 0):
-    #     print("警告: 油膜厚度存在非正值！")
-    # 油膜厚度梯度 (∂h/∂x, ∂h/∂y)
-    h_grad = (-np.sin(pitch), np.sin(roll))
-
-    # 2. 确定边界条件
-    bc_lst = [p_lst[0]]
-    for _, p_val in p_lst[1:]:
-        bc_lst.append(p_val)
-
-    # 3. 计算三角网格中心处的相对运动速度
-    if gear_type == "drive":
-        U_cells = np.array(
-            [
-                [
-                    -omega * point[1],
-                    omega * (point[0] - DRIVE_GEAR_CENTER[0]),
-                ]
-                for point in centroids
-            ]
-        )
-    else:
-        U_cells = np.array(
-            [
-                [
-                    omega * point[1],
-                    -omega * (point[0] - SLAVE_GEAR_CENTER[0]),
-                ]
-                for point in centroids
-            ]
-        )
-
-    # 4. 计算三角网格中心处的挤压速度（两表面相互远离为正）
-    ht_cells = (
-        state.v[2] * np.ones(len(centroids))
-        + np.cos(roll)
-        * state.w[0]
-        * np.array([point[1] for point in centroids])
-        - np.cos(pitch)
-        * state.w[1]
-        * np.array([point[0] for point in centroids])
-    )
-
-    return FilmParam(
-        h_cells=h_cells,
-        h_grad=h_grad,
-        U_cells=U_cells,
-        ht_cells=ht_cells,
-        bc_lst=bc_lst,
-    )
+    return FilmParameterCalculator(mesh, p_lst, omega, gear_type).solve(state)

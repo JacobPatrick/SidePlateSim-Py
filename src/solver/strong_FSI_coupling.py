@@ -10,7 +10,7 @@ from src.solver.reynolds import ReynoldsSolver
 from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from utils.math_tools import quaternion_multiply, quat_slerp
-from utils.calc_film_params import calc_film_params
+from utils.calc_film_params import FilmParameterCalculator
 
 
 @dataclass(frozen=True)
@@ -119,6 +119,7 @@ class SingleStepFSISolver:
         initial_relaxation: float = 0.5,
         min_relaxation: float = 0.01,
         max_relaxation: float = 0.9,
+        verbose: bool = False,
     ):
         self.drive_mesh = drive_mesh
         self.slave_mesh = slave_mesh
@@ -139,6 +140,19 @@ class SingleStepFSISolver:
         self.initial_relaxation = initial_relaxation
         self.min_relaxation = min_relaxation
         self.max_relaxation = max_relaxation
+        self.verbose = verbose
+        self.drive_film_calculator = FilmParameterCalculator(
+            drive_mesh,
+            drive_p_lst,
+            omega,
+            "drive",
+        )
+        self.slave_film_calculator = FilmParameterCalculator(
+            slave_mesh,
+            slave_p_lst,
+            omega,
+            "slave",
+        )
 
         # Aitken 参数历史
         self.aitken_alpha = initial_relaxation
@@ -162,20 +176,8 @@ class SingleStepFSISolver:
         for num_iter in range(1, self.max_sub_iter + 1):
             contact_flag = False
             #  2.1 油膜求解
-            drive_film_param = calc_film_params(
-                self.drive_mesh,
-                state_pred,
-                self.drive_p_lst,
-                self.omega,
-                "drive",
-            )
-            slave_film_param = calc_film_params(
-                self.slave_mesh,
-                state_pred,
-                self.slave_p_lst,
-                self.omega,
-                "slave",
-            )
+            drive_film_param = self.drive_film_calculator.solve(state_pred)
+            slave_film_param = self.slave_film_calculator.solve(state_pred)
             calc_drive_pressure = self.drive_reynolds_solver.solve(
                 drive_film_param
             )
@@ -241,7 +243,8 @@ class SingleStepFSISolver:
             self.tol = base_tol
             if res_norm < self.tol:
                 state_pred = state_calc
-                print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
+                if self.verbose:
+                    print(f"单步 FSI 求解完成，迭代次数: {num_iter}")
                 solve_info = {
                     'success': True,
                     'num_iter': num_iter,
@@ -272,9 +275,11 @@ class SingleStepFSISolver:
             state_pred = _relax(state_pred, state_calc, self.aitken_alpha)
 
         else:
-            print(
-                f"警告: FSI 单步求解器在最大迭代次数内未收敛，步长: {dt * 1000:.3f}ms, 残差: {res_norm:.3e}"
-            )
+            if self.verbose:
+                print(
+                    "警告: FSI 单步求解器在最大迭代次数内未收敛，"
+                    f"步长: {dt * 1e6:.3f}us, 残差: {res_norm:.3e}"
+                )
             solve_info = {
                 'success': False,
                 'num_iter': self.max_sub_iter,
@@ -286,3 +291,10 @@ class SingleStepFSISolver:
             }
 
             return state_pred, solve_info
+
+    def calc_film_params(self, state: SidePlateState):
+        """返回给定状态下主动轮和从动轮的油膜参数。"""
+        return (
+            self.drive_film_calculator.solve(state),
+            self.slave_film_calculator.solve(state),
+        )
