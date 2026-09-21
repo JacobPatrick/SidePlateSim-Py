@@ -61,7 +61,7 @@ def main():
     )
     dt_state = {"value": base_dt}
 
-    t = 36.6692 * 1e-3
+    t = 43.1434 * 1e-3
     # z, roll, pitch = 4e-05, -2.575e-4, 0.0
     # q = euler_to_quaternion(roll, pitch, 0.0)
     # state = SidePlateState(
@@ -71,10 +71,10 @@ def main():
     #     w=np.array([0.0, 0.0, 0.0]),
     # )
     state = SidePlateState(
-        p=np.array([0.0, 0.0, 4.53390188e-06]),
-        v=np.array([0.0, 0.0, -5.77890492e-05]),
-        q=np.array([1.00000000e+00, 5.40188252e-06, 1.91534301e-07, -1.73232150e-11]),
-        w=np.array([0.0014692, 0.00135047, 0.0])
+        p=np.array([0.0, 0.0, 2.36193468e-06]),
+        v=np.array([0.0, 0.0, -4.29459586e-06]),
+        q=np.array([1.00000000e+00, 1.03488856e-05, -1.26616694e-06, -1.13638794e-11]),
+        w=np.array([0.00074013, -0.00017456, 0.0])
     )
 
     mock_lpm = MockLPM()
@@ -168,7 +168,7 @@ def main():
             state = new_state
             t += dt_state["value"]
             dt_state["value"] = controller.get_dt()
-            with open("results/log/20260815_6.txt", "a") as f:
+            with open("results/log/20260902_3.txt", "a") as f:
                 f.write(f"时间: {t*1000:.4f}ms\n")
                 f.write(
                     f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
