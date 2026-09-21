@@ -20,6 +20,8 @@ class IterationParameters:
     max_step_size: float
     min_step_size: float
     total_time: float
+    equilibrate_initial_state: bool = False
+    equilibrium_max_evaluations: int = 50
 
 
 @dataclass(frozen=True)

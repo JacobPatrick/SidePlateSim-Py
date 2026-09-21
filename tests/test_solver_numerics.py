@@ -21,9 +21,11 @@ from src.solver.mock_LPM import MockLPM
 from src.solver.reynolds import ReynoldsSolver
 from src.solver.strong_FSI_coupling import (
     FSIConvergenceTolerances,
+    SingleStepFSISolver,
     _calc_res_vec,
 )
-from utils.math_tools import euler_to_quaternion
+from src.solver.static_equilibrium import StaticEquilibriumSolver
+from utils.math_tools import euler_to_quaternion, quaternion_to_euler
 from utils.calc_film_params import calc_film_params
 
 
@@ -241,6 +243,75 @@ class ReynoldsSolverTests(unittest.TestCase):
             rtol=1e-8,
             atol=1e-6,
         )
+
+
+class StaticEquilibriumTests(unittest.TestCase):
+    def test_initial_guess_converges_to_force_and_moment_balance(self):
+        omega = 2000.0 * 2.0 * np.pi / 60.0
+        drive_pressures, slave_pressures = MockLPM().solve(0.0)
+        drive_mesh = MeshGenerator(
+            GearProfilePath(
+                "assets/drive_gear.DXF",
+                "assets/relief.DXF",
+            ),
+            omega,
+            "drive",
+        ).solve(0.0, drive_pressures)
+        slave_mesh = MeshGenerator(
+            GearProfilePath(
+                "assets/slave_gear.DXF",
+                "assets/relief.DXF",
+            ),
+            omega,
+            "slave",
+        ).solve(0.0, slave_pressures)
+        mass = SidePlateMassProp(
+            m=1.695,
+            barycenter=np.array([0.0, 0.0, 0.025]),
+            Ic=np.diag([1.657e-3, 5.443e-3, 4.493e-3]),
+        )
+        fluid = FluidProp(mu=5e-4)
+        fsi_solver = SingleStepFSISolver(
+            drive_mesh=drive_mesh,
+            slave_mesh=slave_mesh,
+            drive_p_lst=drive_pressures,
+            slave_p_lst=slave_pressures,
+            omega=omega,
+            drive_reynolds_solver=ReynoldsSolver(drive_mesh, fluid),
+            slave_reynolds_solver=ReynoldsSolver(slave_mesh, fluid),
+            drive_contact_solver=ContactSolver(
+                drive_mesh,
+                k=1e17,
+                c=1e10,
+            ),
+            slave_contact_solver=ContactSolver(
+                slave_mesh,
+                k=1e17,
+                c=1e10,
+            ),
+            dynamics_solver=ForwardDynamicsSolver(mass),
+            side_plate_mass_prop=mass,
+        )
+        non_film_load = ForceTorque(
+            F=np.array([0.0, 0.0, -6500.0]),
+            M=np.array([90.0, 0.0, 0.0]),
+        )
+        initial_state = SidePlateState(
+            p=np.array([0.0, 0.0, 2.5e-6]),
+            q=euler_to_quaternion(5e-5, 0.0, 0.0),
+        )
+
+        state, info = StaticEquilibriumSolver(
+            fsi_solver,
+            non_film_load,
+        ).solve(initial_state)
+
+        self.assertTrue(info.success, info.message)
+        self.assertLess(np.linalg.norm(info.residual, ord=np.inf), 1e-8)
+        self.assertAlmostEqual(state.p[2], 2.40589847e-6, places=13)
+        roll, pitch, _ = quaternion_to_euler(*state.q)
+        self.assertAlmostEqual(roll, 5.34763050e-5, places=12)
+        self.assertAlmostEqual(pitch, -2.26373677e-6, places=12)
 
 
 if __name__ == "__main__":

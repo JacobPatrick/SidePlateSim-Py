@@ -158,6 +158,77 @@ class SingleStepFSISolver:
         self.aitken_alpha = initial_relaxation
         self.prev_res_vec = None
 
+    @staticmethod
+    def _combine_pressure_loads(film_pressure, contact_pressure):
+        total_force = film_pressure.F + contact_pressure.F
+        if abs(total_force) < 1e-12:
+            center = np.zeros(2)
+        else:
+            center = (
+                film_pressure.center * film_pressure.F
+                + contact_pressure.center * contact_pressure.F
+            ) / total_force
+        return total_force, center
+
+    def evaluate_loads(
+        self,
+        state: SidePlateState,
+        non_film_force_torque: ForceTorque,
+    ):
+        """计算给定侧板状态下的油膜/接触合力与合力矩。"""
+        drive_film_param = self.drive_film_calculator.solve(state)
+        slave_film_param = self.slave_film_calculator.solve(state)
+        drive_pressure = self.drive_reynolds_solver.solve(drive_film_param)
+        slave_pressure = self.slave_reynolds_solver.solve(slave_film_param)
+
+        F_drive = drive_pressure.F
+        F_slave = slave_pressure.F
+        center_drive = drive_pressure.center
+        center_slave = slave_pressure.center
+
+        if np.any(drive_film_param.h_cells <= 0):
+            drive_contact = self.drive_contact_solver.solve(
+                drive_film_param
+            )
+            F_drive, center_drive = self._combine_pressure_loads(
+                drive_pressure,
+                drive_contact,
+            )
+
+        if np.any(slave_film_param.h_cells <= 0):
+            slave_contact = self.slave_contact_solver.solve(
+                slave_film_param
+            )
+            F_slave, center_slave = self._combine_pressure_loads(
+                slave_pressure,
+                slave_contact,
+            )
+
+        F = non_film_force_torque.F.copy()
+        F[2] += F_drive + F_slave
+        M_drive = np.cross(
+            np.array([*center_drive, 0.0])
+            - self.side_plate_mass_prop.barycenter,
+            np.array([0.0, 0.0, F_drive]),
+        )
+        M_slave = np.cross(
+            np.array([*center_slave, 0.0])
+            - self.side_plate_mass_prop.barycenter,
+            np.array([0.0, 0.0, F_slave]),
+        )
+        M = M_drive + M_slave + non_film_force_torque.M
+        load_info = {
+            "F_drive": F_drive,
+            "F_slave": F_slave,
+            "M": M,
+            "F_side_plate": F[2],
+        }
+        return (
+            ForceTorque(F=F, M=M),
+            load_info,
+            (drive_film_param, slave_film_param),
+        )
+
     def solve(
         self,
         dt: float,
@@ -171,61 +242,12 @@ class SingleStepFSISolver:
         state_pred = state_prev
 
         # 2. 内收敛循环
-        base_tol = self.tol
         state_calc = state_prev
         for num_iter in range(1, self.max_sub_iter + 1):
-            contact_flag = False
-            #  2.1 油膜求解
-            drive_film_param = self.drive_film_calculator.solve(state_pred)
-            slave_film_param = self.slave_film_calculator.solve(state_pred)
-            calc_drive_pressure = self.drive_reynolds_solver.solve(
-                drive_film_param
+            force_torque, load_info, _ = self.evaluate_loads(
+                state_pred,
+                non_film_force_torque,
             )
-            calc_slave_pressure = self.slave_reynolds_solver.solve(
-                slave_film_param
-            )
-            F_drive = calc_drive_pressure.F
-            F_slave = calc_slave_pressure.F
-            center_drive = calc_drive_pressure.center
-            center_slave = calc_slave_pressure.center
-
-            # 2.2 接触力求解
-            if np.any(drive_film_param.h_cells <= 0):
-                contact_flag = True
-                calc_drive_contact = self.drive_contact_solver.solve(
-                    drive_film_param
-                )
-                C_drive = calc_drive_contact.F
-                center_contact = calc_drive_contact.center
-                center_drive = (
-                    center_drive * F_drive + center_contact * C_drive
-                ) / (F_drive + C_drive)
-                F_drive += C_drive
-
-            if np.any(slave_film_param.h_cells <= 0):
-                contact_flag = True
-                calc_slave_contact = self.slave_contact_solver.solve(
-                    slave_film_param
-                )
-                C_slave = calc_slave_contact.F
-                center_contact = calc_slave_contact.center
-                center_slave = (
-                    center_slave * F_slave + center_contact * C_slave
-                ) / (F_slave + C_slave)
-                F_slave += C_slave
-
-            # 2.3 动力学求解
-            F = np.array([0, 0, F_drive + F_slave + non_film_force_torque.F[2]])
-            M_drive = np.cross(
-                [*center_drive, 0] - self.side_plate_mass_prop.barycenter,
-                [0, 0, F_drive],
-            )
-            M_slave = np.cross(
-                [*center_slave, 0] - self.side_plate_mass_prop.barycenter,
-                [0, 0, F_slave],
-            )
-            M = M_drive + M_slave + non_film_force_torque.M
-            force_torque = ForceTorque(F=F, M=M)
             state_calc = self.dynamics_solver.solve(
                 dt,
                 state_prev,
@@ -240,7 +262,6 @@ class SingleStepFSISolver:
                 self.convergence_tolerances,
             )
             res_norm = np.linalg.norm(res_vec, ord=np.inf)
-            self.tol = base_tol
             if res_norm < self.tol:
                 state_pred = state_calc
                 if self.verbose:
@@ -249,10 +270,7 @@ class SingleStepFSISolver:
                     'success': True,
                     'num_iter': num_iter,
                     'res_norm': res_norm,
-                    'F_drive': F_drive,
-                    'F_slave': F_slave,
-                    'M': M,
-                    'F_side_plate': F[2],
+                    **load_info,
                 }
                 return state_pred, solve_info
 
@@ -284,10 +302,7 @@ class SingleStepFSISolver:
                 'success': False,
                 'num_iter': self.max_sub_iter,
                 'res_norm': res_norm,
-                'F_drive': F_drive,
-                'F_slave': F_slave,
-                'M': M,
-                'F_side_plate': F[2],
+                **load_info,
             }
 
             return state_pred, solve_info

@@ -1,0 +1,19 @@
+fluid:
+  density: 850.0
+  viscosity: 5e-4
+gear:
+  inner_radius: 1e-2
+  rotation_speed: 2000.0
+side_plate:
+  m: 1.695
+  barycenter: (0.0, 0.0, 0.025)
+  Ic: "[[1.657e-3, 0.0, 0.0], [0.0, 5.443e-3, 0.0], [0.0, 0.0,  4.493e-3]]"
+  g_vec: (0.0, 0.0, -9.81)
+iteration:
+  base_step_size: 2e-7
+  max_step_size: 5e-7
+  min_step_size: 1e-7
+  total_time: 2e-1
+  # 若要研究真实启动瞬态，请改为 false。
+  equilibrate_initial_state: true
+  equilibrium_max_evaluations: 50
