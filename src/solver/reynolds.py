@@ -1,7 +1,7 @@
 import numpy as np
 from interface.types import FilmParam, FluidProp, Pressure
 from meshpy.triangle import MeshInfo
-from scipy.sparse import lil_matrix
+from scipy.sparse import coo_matrix, lil_matrix
 from scipy.sparse.linalg import spsolve
 
 
@@ -14,8 +14,128 @@ class ReynoldsSolver:
     def __init__(self, mesh: MeshInfo, fluid_prop: FluidProp):
         self.mesh = mesh
         self.mu = fluid_prop.mu
-
         self.equ = ()
+        self._prepare_mesh_geometry()
+
+    def _prepare_mesh_geometry(self):
+        """预计算在同一网格上的所有 Reynolds 求解共享的几何量。"""
+        self.points = np.asarray(self.mesh.points)
+        self.elements = np.asarray(self.mesh.elements, dtype=int)
+        self.facets = np.asarray(self.mesh.facets, dtype=int)
+        self.facet_markers = np.asarray(
+            self.mesh.facet_markers, dtype=int
+        )
+        self.n_cells = len(self.elements)
+
+        triangle_points = self.points[self.elements]
+        self.centroids = np.mean(triangle_points, axis=1)
+        edge_1 = triangle_points[:, 1] - triangle_points[:, 0]
+        edge_2 = triangle_points[:, 2] - triangle_points[:, 0]
+        self.areas = 0.5 * np.abs(
+            edge_1[:, 0] * edge_2[:, 1]
+            - edge_1[:, 1] * edge_2[:, 0]
+        )
+
+        edge_to_cell = {}
+        owners = []
+        neighbors = []
+        face_nodes = []
+        markers = []
+        for cell_idx, element in enumerate(self.elements):
+            for local_idx in range(3):
+                node_1 = int(element[local_idx])
+                node_2 = int(element[(local_idx + 1) % 3])
+                key = (min(node_1, node_2), max(node_1, node_2))
+                if key in edge_to_cell:
+                    owners.append(edge_to_cell.pop(key))
+                    neighbors.append(cell_idx)
+                    face_nodes.append(key)
+                    markers.append(0)
+                else:
+                    edge_to_cell[key] = cell_idx
+
+        for facet, marker in zip(self.facets, self.facet_markers):
+            node_1, node_2 = int(facet[0]), int(facet[1])
+            key = (min(node_1, node_2), max(node_1, node_2))
+            if key in edge_to_cell:
+                owners.append(edge_to_cell.pop(key))
+                neighbors.append(-1)
+                # 保留边界边原有方向，供泄漏流量计算使用。
+                face_nodes.append((node_1, node_2))
+                markers.append(int(marker))
+
+        if edge_to_cell:
+            raise ValueError(
+                "网格未闭合或 facets 不匹配，"
+                f"剩余 {len(edge_to_cell)} 条边"
+            )
+
+        self.face_owners = np.asarray(owners, dtype=int)
+        self.face_neighbors = np.asarray(neighbors, dtype=int)
+        self.face_nodes = np.asarray(face_nodes, dtype=int)
+        self.face_markers = np.asarray(markers, dtype=int)
+        self.internal_face_indices = np.flatnonzero(
+            self.face_neighbors >= 0
+        )
+        self.boundary_face_indices = np.flatnonzero(
+            self.face_neighbors < 0
+        )
+
+        face_vectors = (
+            self.points[self.face_nodes[:, 1]]
+            - self.points[self.face_nodes[:, 0]]
+        )
+        face_lengths = np.linalg.norm(face_vectors, axis=1)
+        self.face_geometry = np.empty(len(self.face_owners))
+
+        internal = self.internal_face_indices
+        owner_internal = self.face_owners[internal]
+        neighbor_internal = self.face_neighbors[internal]
+        center_distance = np.linalg.norm(
+            self.centroids[neighbor_internal]
+            - self.centroids[owner_internal],
+            axis=1,
+        )
+        self.face_geometry[internal] = (
+            face_lengths[internal] / center_distance
+        )
+
+        boundary = self.boundary_face_indices
+        owner_boundary = self.face_owners[boundary]
+        boundary_midpoints = 0.5 * (
+            self.points[self.face_nodes[boundary, 0]]
+            + self.points[self.face_nodes[boundary, 1]]
+        )
+        boundary_distance = np.linalg.norm(
+            self.centroids[owner_boundary] - boundary_midpoints,
+            axis=1,
+        )
+        self.face_geometry[boundary] = (
+            face_lengths[boundary] / boundary_distance
+        )
+
+        # 稀疏矩阵非零位置只依赖网格拓扑。
+        self.internal_owners = owner_internal
+        self.internal_neighbors = neighbor_internal
+        self.boundary_owners = owner_boundary
+        self.matrix_rows = np.concatenate(
+            [
+                owner_internal,
+                owner_internal,
+                neighbor_internal,
+                neighbor_internal,
+                owner_boundary,
+            ]
+        )
+        self.matrix_cols = np.concatenate(
+            [
+                owner_internal,
+                neighbor_internal,
+                owner_internal,
+                neighbor_internal,
+                owner_boundary,
+            ]
+        )
 
     def _assemble_reynolds_fvm(self, film_param: FilmParam):
         """
@@ -26,119 +146,61 @@ class ReynoldsSolver:
         ht_cells = film_param.ht_cells
         h_grad = film_param.h_grad
         bc_lst = film_param.bc_lst
-        points = np.array(self.mesh.points)
-        elements = np.array(self.mesh.elements)
-        facets = np.array(self.mesh.facets)
-        facet_markers = np.array(self.mesh.facet_markers)
-
-        n_cells = len(elements)
-
-        # 1. 单元几何属性计算
-        centroids = np.mean(points[elements], axis=1)  # (nC, 2)
-        areas = np.zeros(n_cells)
-        for i, e in enumerate(elements):
-            p0, p1, p2 = points[e]
-            areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
-
         # 扩散系数 D = h^3 / (12μ)
         D_cells = h_cells**3 / (12.0 * self.mu)
-
-        # 2. 构建面列表 (内部面 + 边界面)
-        edge_to_cell = {}
-        faces = []
-        # face 结构: {'cells': (owner, neighbor_or_None), 'nodes': (n1, n2), 'marker': int}
-
-        for i, e in enumerate(elements):
-            for k in range(3):
-                n1, n2 = int(e[k]), int(e[(k + 1) % 3])
-                key = (min(n1, n2), max(n1, n2))
-                if key in edge_to_cell:
-                    j = edge_to_cell.pop(key)
-                    faces.append(
-                        {
-                            "cells": (j, i),
-                            "nodes": key,
-                            "marker": 0,
-                        }
-                    )
-                else:
-                    edge_to_cell[key] = i
-
-        facets = np.array(self.mesh.facets, dtype=int)
-        facet_markers = np.array(self.mesh.facet_markers, dtype=int)
-        for idx in range(len(facets)):
-            n1, n2 = int(facets[idx][0]), int(facets[idx][1])
-            key = (min(n1, n2), max(n1, n2))
-            if key in edge_to_cell:
-                i = edge_to_cell.pop(key)
-                faces.append(
-                    {
-                        "cells": (i, None),
-                        "nodes": (n1, n2),
-                        "marker": int(facet_markers[idx]),
-                    }
-                )
-
-        # 安全断言：所有边界边应已被 facets 匹配
-        assert (
-            len(edge_to_cell) == 0
-        ), f"网格未闭合或 facets 不匹配，剩余 {len(edge_to_cell)} 条边"
-
-        # 3. 稀疏矩阵组装
         if not bc_lst:
             raise ValueError("Dirichlet 边界必需，但 bc_lst 为空")
         default_p = bc_lst[0]
         bc_map = {idx + 1: p_val for idx, p_val in enumerate(bc_lst)}
 
-        A = lil_matrix((n_cells, n_cells))
-        b = np.zeros(n_cells)
+        internal = self.internal_face_indices
+        boundary = self.boundary_face_indices
+        internal_transmissibility = (
+            0.5
+            * (
+                D_cells[self.internal_owners]
+                + D_cells[self.internal_neighbors]
+            )
+            * self.face_geometry[internal]
+        )
+        boundary_transmissibility = (
+            D_cells[self.boundary_owners]
+            * self.face_geometry[boundary]
+        )
+        matrix_data = np.concatenate(
+            [
+                -internal_transmissibility,
+                internal_transmissibility,
+                internal_transmissibility,
+                -internal_transmissibility,
+                -boundary_transmissibility,
+            ]
+        )
+        A = coo_matrix(
+            (matrix_data, (self.matrix_rows, self.matrix_cols)),
+            shape=(self.n_cells, self.n_cells),
+        ).tocsr()
 
-        for face in faces:
-            n1, n2 = face["nodes"]
-            p1, p2 = points[n1], points[n2]
-            edge_vec = p2 - p1
-            length = np.linalg.norm(edge_vec)
-            # 初始局部法向 (基于边向量逆时针旋转90°)
-            normal = np.array([edge_vec[1], -edge_vec[0]]) / length
+        conv = 0.5 * (
+            U_cells[:, 0] * h_grad[0]
+            + U_cells[:, 1] * h_grad[1]
+        )
+        b = (conv + ht_cells) * self.areas
+        boundary_pressures = np.fromiter(
+            (
+                bc_map.get(marker, default_p)
+                for marker in self.face_markers[boundary]
+            ),
+            dtype=float,
+            count=len(boundary),
+        )
+        np.add.at(
+            b,
+            self.boundary_owners,
+            -boundary_transmissibility * boundary_pressures,
+        )
 
-            i = face["cells"][0]
-
-            if face["cells"][1] is not None:  # 内部面
-                j = face["cells"][1]
-                # 校准法向：确保从 owner(i) 指向 neighbor(j)
-                vec_ij = centroids[j] - centroids[i]
-                if np.dot(normal, vec_ij) < 0:
-                    normal = -normal
-
-                # 扩散项通量系数
-                dist = np.linalg.norm(vec_ij)
-                avg_D = 0.5 * (D_cells[i] + D_cells[j])
-                T = avg_D * length / dist
-                A[i, i] -= T
-                A[i, j] += T
-                A[j, i] += T
-                A[j, j] -= T
-
-            else:  # 边界面
-                # 校准法向：确保指向单元外部
-                mid_pt = (p1 + p2) / 2.0
-                if np.dot(normal, mid_pt - centroids[i]) < 0:
-                    normal = -normal
-
-                marker = face["marker"]
-                p_bc = bc_map.get(marker, default_p)
-                dist = np.linalg.norm(centroids[i] - mid_pt)
-                T = D_cells[i] * length / dist
-                A[i, i] -= T
-                b[i] -= T * p_bc
-
-        # RHS
-        for i in range(n_cells):
-            conv = 0.5 * (U_cells[i, 0] * h_grad[0] + U_cells[i, 1] * h_grad[1])
-            ht = ht_cells[i]
-            b[i] += (conv + ht) * areas[i]
-
-        self.equ = (A.tocsr(), b)
+        self.equ = (A, b)
 
     def solve(self, film_param: FilmParam) -> Pressure:
         """
@@ -151,20 +213,16 @@ class ReynoldsSolver:
         # 检查是否存在碰撞
         h_cells = film_param.h_cells
         if np.any(h_cells <= 0):
-            area = np.where(h_cells <= 0)[0].tolist()
+            area = np.flatnonzero(h_cells <= 0)
             p_contact = 0  # 碰撞区域压力固定为标准大气压
             A_film, b_film = _process_contact_area(A, b, area, p_contact)
 
-            p = []
             p_film = spsolve(A_film, b_film)
-            p_iter = iter(p_film)
-            # 拼接得到完整齿轮端面区域压力场
-            for idx in range(len(h_cells)):
-                if idx in area:
-                    p.append(p_contact)
-                else:
-                    p.append(next(p_iter))
-            p = np.array(np.clip(p, 0.0, None))  # 负压截断
+            film_mask = np.ones(len(h_cells), dtype=bool)
+            film_mask[area] = False
+            p = np.full(len(h_cells), p_contact, dtype=float)
+            p[film_mask] = p_film
+            p = np.clip(p, 0.0, None)  # 负压截断
             F, center = self._calc_force(p)
         else:
             p = spsolve(A, b)
@@ -177,21 +235,13 @@ class ReynoldsSolver:
         """
         根据压力分布求油膜压力
         """
-        points = np.array(self.mesh.points)
-        elements = np.array(self.mesh.elements)
-
-        centroids = np.mean(points[elements], axis=1)
-        areas = np.zeros(len(elements))
-        for i, e in enumerate(elements):
-            p0, p1, p2 = points[e]
-            areas[i] = 0.5 * np.abs(np.cross(p1 - p0, p2 - p0))
-
-        F = np.sum(p * areas)
+        weighted_pressure = p * self.areas
+        F = np.sum(weighted_pressure)
         if abs(F) < 1e-8:
             center = np.array([0.0, 0.0])
             return F, center
-        i = np.sum(p * centroids[:, 0] * areas) / F
-        j = np.sum(p * centroids[:, 1] * areas) / F
+        i = np.dot(weighted_pressure, self.centroids[:, 0]) / F
+        j = np.dot(weighted_pressure, self.centroids[:, 1]) / F
         center = np.array([i, j])
 
         return F, center
