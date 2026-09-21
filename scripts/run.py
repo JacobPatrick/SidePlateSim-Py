@@ -152,11 +152,8 @@ def main():
 
         # 单步 FSI 求解成功，使用接受状态下两个油膜的局部闭合速度
         # 计算下一步步长。
-        drive_film_param = calc_film_params(
-            drive_mesh, new_state, drive_p_lst, omega, "drive"
-        )
-        slave_film_param = calc_film_params(
-            slave_mesh, new_state, slave_p_lst, omega, "slave"
+        drive_film_param, slave_film_param = (
+            single_step_fsi_solver.calc_film_params(new_state)
         )
         side_plate_vec_z = new_state.v[2]
         side_plate_acc_z = (new_state.v[2] - state.v[2]) / step_dt
