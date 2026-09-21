@@ -22,6 +22,8 @@ class IterationParameters:
     total_time: float
     equilibrate_initial_state: bool = False
     equilibrium_max_evaluations: int = 50
+    log_every_steps: int = 100
+    log_path: str = "results/log/simulation.txt"
 
 
 @dataclass(frozen=True)

@@ -17,3 +17,5 @@ iteration:
   # 若要研究真实启动瞬态，请改为 false。
   equilibrate_initial_state: true
   equilibrium_max_evaluations: 50
+  log_every_steps: 100
+  log_path: results/log/optimized_run.txt

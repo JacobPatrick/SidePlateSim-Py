@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -27,6 +28,7 @@ from src.solver.strong_FSI_coupling import (
 from src.solver.static_equilibrium import StaticEquilibriumSolver
 from utils.math_tools import euler_to_quaternion, quaternion_to_euler
 from utils.calc_film_params import calc_film_params
+from utils.simulation_logger import SimulationLogger
 
 
 class ForwardDynamicsTests(unittest.TestCase):
@@ -312,6 +314,38 @@ class StaticEquilibriumTests(unittest.TestCase):
         roll, pitch, _ = quaternion_to_euler(*state.q)
         self.assertAlmostEqual(roll, 5.34763050e-5, places=12)
         self.assertAlmostEqual(pitch, -2.26373677e-6, places=12)
+
+
+class SimulationLoggerTests(unittest.TestCase):
+    def test_logger_records_first_and_configured_steps(self):
+        state = SidePlateState()
+        solve_info = {
+            "num_iter": 3,
+            "res_norm": 0.1,
+            "F_drive": 1.0,
+            "F_slave": 2.0,
+            "M": np.zeros(3),
+            "F_side_plate": 3.0,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = f"{directory}/simulation.txt"
+            logger = SimulationLogger(path, every_steps=100)
+            for step in (1, 2, 99, 100):
+                logger.write_step(
+                    step,
+                    time=step * 1e-6,
+                    dt=1e-6,
+                    retry_count=0,
+                    solve_info=solve_info,
+                    state=state,
+                )
+            logger.close()
+            with open(path, encoding="utf-8") as log_file:
+                contents = log_file.read()
+
+        self.assertEqual(contents.count("时间:"), 2)
+        self.assertIn("0.001000ms", contents)
+        self.assertIn("0.100000ms", contents)
 
 
 if __name__ == "__main__":

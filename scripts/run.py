@@ -23,6 +23,7 @@ from src.solver.strong_FSI_coupling import SingleStepFSISolver
 from src.solver.static_equilibrium import StaticEquilibriumSolver
 from utils.calc_film_params import calc_film_params
 from utils.math_tools import euler_to_quaternion
+from utils.simulation_logger import SimulationLogger
 
 
 def smooth_loading(t, load):
@@ -160,6 +161,11 @@ def main():
             f"状态={state}"
         )
 
+    simulation_logger = SimulationLogger(
+        params.iteration.log_path,
+        every_steps=params.iteration.log_every_steps,
+    )
+    step_index = 0
     while t < total_time:
         # 1. 集中参数法求齿腔压力
         drive_p_lst, slave_p_lst = mock_lpm.solve(t)
@@ -216,23 +222,17 @@ def main():
 
         state = new_state
         t += step_dt
-        with open("results/log/20260908_1.txt", "a") as f:
-            f.write(f"时间: {t*1000:.4f}ms\n")
-            f.write(
-                f"时间步: {step_dt * 1e6:.4f}us, "
-                f"重试次数: {retry_count}\n"
-            )
-            f.write(
-                f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
-            )
-            f.write(
-                f"侧板受力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
-            )
-            f.write(f"侧板受合力矩: M={solve_info['M']}N·m\n")
-            f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
-            f.write(
-                f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"
-            )
+        step_index += 1
+        simulation_logger.write_step(
+            step_index=step_index,
+            time=t,
+            dt=step_dt,
+            retry_count=retry_count,
+            solve_info=solve_info,
+            state=state,
+        )
+
+    simulation_logger.close()
 
     # 4. 可视化最终状态下油膜压力分布
     drive_p_lst, slave_p_lst = mock_lpm.solve(t)
