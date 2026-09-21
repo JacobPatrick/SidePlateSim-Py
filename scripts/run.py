@@ -20,6 +20,7 @@ from src.solver.reynolds import ReynoldsSolver
 from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from src.solver.strong_FSI_coupling import SingleStepFSISolver
+from src.solver.static_equilibrium import StaticEquilibriumSolver
 from utils.calc_film_params import calc_film_params
 from utils.math_tools import euler_to_quaternion
 
@@ -39,6 +40,7 @@ def main():
 
     # 油液物性
     oil_mu = np.float64(params.fluid.viscosity)
+    fluid_prop = FluidProp(mu=oil_mu)
 
     # 时间步长与总时间
     base_dt = float(params.iteration.base_step_size)
@@ -95,6 +97,68 @@ def main():
     new_state = None
     F_balance = 6.5e3
     M_balance = 90.0
+    non_film_force_torque = ForceTorque(
+        F=np.array([0.0, 0.0, -F_balance]),
+        M=np.array([M_balance, 0.0, 0.0]),
+    )
+
+    def build_fsi_solver(
+        drive_mesh,
+        slave_mesh,
+        drive_p_lst,
+        slave_p_lst,
+    ):
+        return SingleStepFSISolver(
+            drive_mesh=drive_mesh,
+            slave_mesh=slave_mesh,
+            drive_p_lst=drive_p_lst,
+            slave_p_lst=slave_p_lst,
+            omega=omega,
+            drive_reynolds_solver=ReynoldsSolver(drive_mesh, fluid_prop),
+            slave_reynolds_solver=ReynoldsSolver(slave_mesh, fluid_prop),
+            drive_contact_solver=ContactSolver(
+                drive_mesh,
+                k=1e17,
+                c=1e10,
+            ),
+            slave_contact_solver=ContactSolver(
+                slave_mesh,
+                k=1e17,
+                c=1e10,
+            ),
+            dynamics_solver=forward_dynamics_solver,
+            side_plate_mass_prop=side_plate_mass_prop,
+            max_sub_iter=10,
+            tol=1.0,
+        )
+
+    if params.iteration.equilibrate_initial_state:
+        drive_p_lst, slave_p_lst = mock_lpm.solve(t)
+        drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
+        slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
+        equilibrium_solver = StaticEquilibriumSolver(
+            build_fsi_solver(
+                drive_mesh,
+                slave_mesh,
+                drive_p_lst,
+                slave_p_lst,
+            ),
+            non_film_force_torque,
+            max_evaluations=params.iteration.equilibrium_max_evaluations,
+        )
+        state, equilibrium_info = equilibrium_solver.solve(state)
+        if not equilibrium_info.success:
+            raise RuntimeError(
+                "初始静力平衡求解失败: "
+                f"{equilibrium_info.message}; "
+                f"残差={equilibrium_info.residual}"
+            )
+        print(
+            "初始静力平衡求解完成: "
+            f"评估次数={equilibrium_info.num_evaluations}, "
+            f"残差={equilibrium_info.residual}, "
+            f"状态={state}"
+        )
 
     while t < total_time:
         # 1. 集中参数法求齿腔压力
@@ -103,31 +167,12 @@ def main():
         # 2. 网格划分与油膜参数求解
         drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
         slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
-        # 3.1 初始化 Reynolds 求解器、接触求解器和 FSI 求解器
-        fluid_prop = FluidProp(mu=oil_mu)
-        drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
-        slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
-
-        drive_contact_solver = ContactSolver(drive_mesh, k=1e17, c=1e10)
-        slave_contact_solver = ContactSolver(slave_mesh, k=1e17, c=1e10)
-
-        F = np.array([0, 0, -F_balance])
-        M = np.array([M_balance, 0, 0])
-
-        single_step_fsi_solver = SingleStepFSISolver(
-            drive_mesh=drive_mesh,
-            slave_mesh=slave_mesh,
-            drive_p_lst=drive_p_lst,
-            slave_p_lst=slave_p_lst,
-            omega=omega,
-            drive_reynolds_solver=drive_reynolds_solver,
-            slave_reynolds_solver=slave_reynolds_solver,
-            drive_contact_solver=drive_contact_solver,
-            slave_contact_solver=slave_contact_solver,
-            dynamics_solver=forward_dynamics_solver,
-            side_plate_mass_prop=side_plate_mass_prop,
-            max_sub_iter=10,
-            tol=1.0,
+        # 3.1 初始化当前相位的 Reynolds、接触和 FSI 求解器
+        single_step_fsi_solver = build_fsi_solver(
+            drive_mesh,
+            slave_mesh,
+            drive_p_lst,
+            slave_p_lst,
         )
 
         # 3.2 单步 FSI 求解。失败重试仍处于同一物理时刻，因此复用
@@ -138,7 +183,7 @@ def main():
             new_state, solve_info = single_step_fsi_solver.solve(
                 dt=step_dt,
                 state_prev=state,
-                non_film_force_torque=ForceTorque(F=F, M=M),
+                non_film_force_torque=non_film_force_torque,
             )
             if solve_info["success"]:
                 break
