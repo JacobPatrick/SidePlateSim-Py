@@ -77,6 +77,6 @@ class MeshGenerator:
         # )
         film_poly = rotated
         # 2. 划分网格
-        mesh = shapely_to_meshpy(film_poly, max_area=1e-7, markers=p_lst)
+        mesh = shapely_to_meshpy(film_poly, max_area=1e-5, markers=p_lst)
 
         return mesh
