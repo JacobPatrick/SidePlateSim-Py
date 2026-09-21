@@ -26,42 +26,41 @@ class MeshGenerator:
         ], "警告: 齿轮类型必须是 'drive' 或 'slave'"
         self.gear_type = gear_type
 
+        # DXF 解析、曲线离散和固定平移与时间无关，只做一次。
+        gear_poly = load_gear_profile_from_dxf(
+            self.gear_profile_path.gear_poly_path
+        )
+        if self.gear_type == "drive":
+            translate_param = DRIVE_GEAR_CENTER
+        else:
+            translate_param = (
+                SLAVE_GEAR_CENTER[0] + 0.061,
+                SLAVE_GEAR_CENTER[1],
+            )
+        self.base_poly = transform_operation(
+            gear_poly,
+            transform="translate",
+            translate_param=translate_param,
+        )
+
     def solve(
         self,
         t,
         p_lst,
     ):
-        # 1. 导入齿轮轮廓
-        gear_poly = load_gear_profile_from_dxf(
-            self.gear_profile_path.gear_poly_path
-        )
-
         # 油膜区域随齿轮旋转而变化
         deg = (t * self.omega * 180 / np.pi) % 30  # 12 齿齿轮
         if self.gear_type == "drive":
             # 主动轮逆时针旋转，齿轮轴心在原点，偏移到 DRIVE_GEAR_CENTER
-            translated = transform_operation(
-                gear_poly,
-                transform="translate",
-                translate_param=(DRIVE_GEAR_CENTER[0], DRIVE_GEAR_CENTER[1]),
-            )
             rotated = transform_operation(
-                translated,
+                self.base_poly,
                 transform="rotate",
                 rotate_param=(np.radians(-deg), DRIVE_GEAR_CENTER),
             )
         else:
             # 从动轮顺时针旋转，齿轮轴心在 (-0.061, 0)，偏移到 SLAVE_GEAR_CENTER
-            translated = transform_operation(
-                gear_poly,
-                transform="translate",
-                translate_param=(
-                    SLAVE_GEAR_CENTER[0] + 0.061,
-                    SLAVE_GEAR_CENTER[1],
-                ),
-            )
             rotated = transform_operation(
-                translated,
+                self.base_poly,
                 transform="rotate",
                 rotate_param=(
                     np.radians(deg - 4),
@@ -76,7 +75,7 @@ class MeshGenerator:
         #     rotated, relief_poly, operation="difference"
         # )
         film_poly = rotated
-        # 2. 划分网格
+        # 1. 划分网格
         mesh = shapely_to_meshpy(film_poly, max_area=1e-5, markers=p_lst)
 
         return mesh

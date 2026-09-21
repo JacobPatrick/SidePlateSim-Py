@@ -1,17 +1,22 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
+import src.solver.mesh_generator as mesh_generator_module
 
 from interface.types import (
     FilmParam,
     ForceTorque,
+    GearProfilePath,
     SidePlateMassProp,
     SidePlateState,
 )
 from src.controller.adaptive_time_step import AdaptiveTimeStepController
 from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
+from src.solver.mesh_generator import MeshGenerator
+from src.solver.mock_LPM import MockLPM
 from src.solver.strong_FSI_coupling import (
     FSIConvergenceTolerances,
     _calc_res_vec,
@@ -166,6 +171,25 @@ class AdaptiveTimeStepTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(next_dt, 5e-7)
+
+
+class MeshGeneratorTests(unittest.TestCase):
+    def test_dxf_profile_is_loaded_only_during_initialization(self):
+        path = GearProfilePath(
+            gear_poly_path="assets/drive_gear.DXF",
+            relief_poly_path="assets/relief.DXF",
+        )
+        pressures, _ = MockLPM().solve(0.0)
+
+        with patch(
+            "src.solver.mesh_generator.load_gear_profile_from_dxf",
+            wraps=mesh_generator_module.load_gear_profile_from_dxf,
+        ) as loader:
+            generator = MeshGenerator(path, omega=1.0, gear_type="drive")
+            generator.solve(t=0.0, p_lst=pressures)
+            generator.solve(t=1e-3, p_lst=pressures)
+
+        self.assertEqual(loader.call_count, 1)
 
 
 if __name__ == "__main__":
