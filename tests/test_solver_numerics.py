@@ -7,6 +7,7 @@ import src.solver.mesh_generator as mesh_generator_module
 
 from interface.types import (
     FilmParam,
+    FluidProp,
     ForceTorque,
     GearProfilePath,
     SidePlateMassProp,
@@ -17,11 +18,13 @@ from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from src.solver.mesh_generator import MeshGenerator
 from src.solver.mock_LPM import MockLPM
+from src.solver.reynolds import ReynoldsSolver
 from src.solver.strong_FSI_coupling import (
     FSIConvergenceTolerances,
     _calc_res_vec,
 )
 from utils.math_tools import euler_to_quaternion
+from utils.calc_film_params import calc_film_params
 
 
 class ForwardDynamicsTests(unittest.TestCase):
@@ -190,6 +193,54 @@ class MeshGeneratorTests(unittest.TestCase):
             generator.solve(t=1e-3, p_lst=pressures)
 
         self.assertEqual(loader.call_count, 1)
+
+
+class ReynoldsSolverTests(unittest.TestCase):
+    def test_vectorized_assembly_preserves_reference_solution(self):
+        omega = 2000.0 * 2.0 * np.pi / 60.0
+        path = GearProfilePath(
+            gear_poly_path="assets/drive_gear.DXF",
+            relief_poly_path="assets/relief.DXF",
+        )
+        pressures, _ = MockLPM().solve(0.0)
+        mesh = MeshGenerator(path, omega, "drive").solve(0.0, pressures)
+        state = SidePlateState(
+            p=np.array([0.0, 0.0, 2.5e-6]),
+            q=euler_to_quaternion(5e-5, 0.0, 0.0),
+        )
+        film = calc_film_params(
+            mesh,
+            state,
+            pressures,
+            omega,
+            "drive",
+        )
+
+        result = ReynoldsSolver(mesh, FluidProp(mu=5e-4)).solve(film)
+
+        self.assertAlmostEqual(result.F, 3011.352098270156, places=8)
+        np.testing.assert_allclose(
+            result.center,
+            np.array([0.01923931, -0.01479037]),
+            rtol=1e-6,
+        )
+        np.testing.assert_allclose(
+            result.p[[0, 1, 2, 10, 100, 500, 1000, 1500]],
+            np.array(
+                [
+                    0.0,
+                    5.01793392e6,
+                    5.37063518e6,
+                    5.29866892e6,
+                    4.34712397e5,
+                    3.20223774e5,
+                    0.0,
+                    3.59520427e3,
+                ]
+            ),
+            rtol=1e-8,
+            atol=1e-6,
+        )
 
 
 if __name__ == "__main__":
