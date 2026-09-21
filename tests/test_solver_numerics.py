@@ -9,6 +9,7 @@ from interface.types import (
     SidePlateMassProp,
     SidePlateState,
 )
+from src.controller.adaptive_time_step import AdaptiveTimeStepController
 from src.solver.contact import ContactSolver
 from src.solver.forward_dynamics import ForwardDynamicsSolver
 from src.solver.strong_FSI_coupling import (
@@ -114,6 +115,57 @@ class ContactTests(unittest.TestCase):
         self.assertEqual(result.F, 0.0)
         np.testing.assert_array_equal(result.p, np.zeros(1))
         np.testing.assert_array_equal(result.center, np.zeros(2))
+
+
+class AdaptiveTimeStepTests(unittest.TestCase):
+    def test_rejected_step_updates_controller_state(self):
+        controller = AdaptiveTimeStepController(
+            dt_init=5e-7,
+            dt_min=1e-7,
+            dt_max=1e-5,
+        )
+
+        retry_dt = controller.reject_step(5e-7)
+
+        self.assertEqual(retry_dt, 2.5e-7)
+        self.assertEqual(controller.get_dt(), retry_dt)
+
+    def test_receding_film_does_not_limit_time_step(self):
+        controller = AdaptiveTimeStepController(
+            dt_init=1e-6,
+            dt_min=1e-8,
+            dt_max=1e-4,
+            smoothing_alpha=0.0,
+        )
+
+        next_dt = controller.compute_next_dt(
+            h_cells=np.array([1e-6]),
+            ht_cells=np.array([1.0]),
+            structural_vec=1.0,
+            structural_acc=1.0,
+            accepted_dt=1e-6,
+        )
+
+        self.assertEqual(next_dt, 2e-6)
+
+    def test_closing_film_applies_immediate_safety_limit(self):
+        controller = AdaptiveTimeStepController(
+            dt_init=1e-4,
+            dt_min=1e-8,
+            dt_max=1e-3,
+            eta=0.5,
+            smoothing_alpha=0.9,
+        )
+
+        next_dt = controller.compute_next_dt(
+            h_cells=np.array([1e-6]),
+            ht_cells=np.array([-1.0]),
+            structural_vec=-1.0,
+            structural_acc=0.0,
+            accepted_dt=1e-4,
+        )
+
+        self.assertAlmostEqual(next_dt, 5e-7)
 
 
 if __name__ == "__main__":

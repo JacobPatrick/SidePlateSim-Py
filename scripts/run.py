@@ -59,7 +59,6 @@ def main():
     controller = AdaptiveTimeStepController(
         dt_init=base_dt, dt_max=max_dt, dt_min=min_dt
     )
-    dt_state = {"value": base_dt}
 
     t = 0.0
     z, roll, pitch = 2.5e-06, 5e-5, 0.0
@@ -94,8 +93,6 @@ def main():
     drive_mesh = None
     slave_mesh = None
     new_state = None
-    dt_state["value"] = base_dt
-
     F_balance = 6.5e3
     M_balance = 90.0
 
@@ -106,15 +103,10 @@ def main():
         # 2. 网格划分与油膜参数求解
         drive_mesh = drive_mesh_generator.solve(t=t, p_lst=drive_p_lst)
         slave_mesh = slave_mesh_generator.solve(t=t, p_lst=slave_p_lst)
-        drive_film_param = calc_film_params(
-            drive_mesh, state, drive_p_lst, omega, "drive"
-        )
-
         # 3.1 初始化 Reynolds 求解器、接触求解器和 FSI 求解器
         fluid_prop = FluidProp(mu=oil_mu)
         drive_reynolds_solver = ReynoldsSolver(drive_mesh, fluid_prop)
         slave_reynolds_solver = ReynoldsSolver(slave_mesh, fluid_prop)
-
 
         drive_contact_solver = ContactSolver(drive_mesh, k=1e17, c=1e10)
         slave_contact_solver = ContactSolver(slave_mesh, k=1e17, c=1e10)
@@ -138,49 +130,66 @@ def main():
             tol=1.0,
         )
 
-        # 3.2 单步 FSI 求解
-        new_state, solve_info = single_step_fsi_solver.solve(
-            dt=dt_state["value"],
-            state_prev=state,
-            non_film_force_torque=ForceTorque(F=F, M=M),
+        # 3.2 单步 FSI 求解。失败重试仍处于同一物理时刻，因此复用
+        # 当前网格和求解器，只减小时间步。
+        step_dt = controller.get_dt()
+        retry_count = 0
+        while True:
+            new_state, solve_info = single_step_fsi_solver.solve(
+                dt=step_dt,
+                state_prev=state,
+                non_film_force_torque=ForceTorque(F=F, M=M),
+            )
+            if solve_info["success"]:
+                break
+            if step_dt <= min_dt:
+                raise RuntimeError(
+                    "FSI 单步求解器未收敛，且时间步长已经达到最小值，"
+                    "终止仿真。"
+                )
+            step_dt = controller.reject_step(step_dt)
+            retry_count += 1
+
+        # 单步 FSI 求解成功，使用接受状态下两个油膜的局部闭合速度
+        # 计算下一步步长。
+        drive_film_param = calc_film_params(
+            drive_mesh, new_state, drive_p_lst, omega, "drive"
+        )
+        slave_film_param = calc_film_params(
+            slave_mesh, new_state, slave_p_lst, omega, "slave"
+        )
+        side_plate_vec_z = new_state.v[2]
+        side_plate_acc_z = (new_state.v[2] - state.v[2]) / step_dt
+        controller.compute_next_dt(
+            h_cells=np.concatenate(
+                [drive_film_param.h_cells, slave_film_param.h_cells]
+            ),
+            ht_cells=np.concatenate(
+                [drive_film_param.ht_cells, slave_film_param.ht_cells]
+            ),
+            structural_vec=side_plate_vec_z,
+            structural_acc=side_plate_acc_z,
+            accepted_dt=step_dt,
         )
 
-        if solve_info["success"]:
-            # 单步 FSI 求解成功，推进时间
-            side_plate_vec_z = new_state.v[2]
-            side_plate_acc_z = (new_state.v[2] - state.v[2]) / dt_state["value"]
-            controller.compute_next_dt(
-                h_cells=drive_film_param.h_cells,
-                ht_cells=drive_film_param.ht_cells,
-                structural_vec=side_plate_vec_z,
-                structural_acc=side_plate_acc_z,
+        state = new_state
+        t += step_dt
+        with open("results/log/20260908_1.txt", "a") as f:
+            f.write(f"时间: {t*1000:.4f}ms\n")
+            f.write(
+                f"时间步: {step_dt * 1e6:.4f}us, "
+                f"重试次数: {retry_count}\n"
             )
-
-            state = new_state
-            t += dt_state["value"]
-            dt_state["value"] = controller.get_dt()
-            with open("results/log/20260908_1.txt", "a") as f:
-                f.write(f"时间: {t*1000:.4f}ms\n")
-                f.write(
-                    f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
-                )
-                f.write(
-                    f"侧板受力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
-                )
-                f.write(f"侧板受合力矩: M={solve_info['M']}N·m\n")
-                f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
-                f.write(
-                    f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"
-                )
-
-        elif not solve_info["success"] and dt_state["value"] >= 2 * min_dt:
-            # 单步 FSI 求解失败，尝试减小 dt 并重做
-            dt_state["value"] *= 0.5
-
-        else:
-            # 单步 FSI 求解失败，且 dt 已经小于最小值，终止仿真
-            raise RuntimeError(
-                f"FSI 单步求解器未收敛，且时间步长已经小于最小值，终止仿真。"
+            f.write(
+                f"迭代次数: {solve_info['num_iter']}, 残差: {solve_info['res_norm']:.3e}\n"
+            )
+            f.write(
+                f"侧板受力: 主动轮 F={solve_info['F_drive']:.2f}N, 从动轮 F={solve_info['F_slave']:.2f}N\n"
+            )
+            f.write(f"侧板受合力矩: M={solve_info['M']}N·m\n")
+            f.write(f"侧板受力: F={solve_info['F_side_plate']:.2f}N\n")
+            f.write(
+                f"侧板状态: p={state.p}, v={state.v}, q={state.q}, w={state.w}\n\n"
             )
 
     # 4. 可视化最终状态下油膜压力分布

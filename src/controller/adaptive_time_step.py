@@ -32,15 +32,14 @@ class AdaptiveTimeStepController:
         self.max_dec = max_decrease
         self.alpha = smoothing_alpha
 
-        self.prev_dt = dt_init
-
     def compute_next_dt(
         self,
         h_cells: np.ndarray,
         ht_cells: np.ndarray,
         structural_vec: float,
         structural_acc: float,
-    ):
+        accepted_dt: float | None = None,
+    ) -> float:
         """
         根据当前步物理场计算下一步时间步长
         Args:
@@ -48,52 +47,56 @@ class AdaptiveTimeStepController:
             ht_cells: 各单元挤压速度 ∂h/∂t (N,)
             structural_vec: 结构速度
             structural_acc: 结构加速度
+            accepted_dt: 刚刚接受的物理时间步
         Returns:
             更新后的 dt
         """
-        # 1. 提取关键指标
-        h_min = np.min(h_cells)
-        # ht_max = np.max(np.abs(ht_cells))
+        base_dt = self.dt if accepted_dt is None else accepted_dt
 
-        # 2. 防碰撞步长阈值计算
-        eps = 1e-12  # 防除零误差
-        ds_max = self.eta * h_min
-        v_abs = abs(structural_vec)
-        a_abs = abs(structural_acc)
-        if a_abs < eps:
-            dt_collision = ds_max / (v_abs + eps)
+        # 1. 只对膜厚正在减小的单元施加防碰撞限制。ht > 0 表示
+        # 两表面远离，不应像旧实现那样因取绝对值而缩短时间步。
+        h_cells = np.asarray(h_cells)
+        ht_cells = np.asarray(ht_cells)
+        if h_cells.shape != ht_cells.shape:
+            raise ValueError("h_cells 和 ht_cells 的形状必须一致")
+        eps = 1e-12
+        closing_speed = np.maximum(-ht_cells, 0.0)
+        valid = (h_cells > 0.0) & (closing_speed > eps)
+
+        # 结构加速度只有指向闭合方向时才构成附加限制。
+        closing_acc = max(-structural_acc, 0.0)
+        if np.any(valid):
+            allowed_displacement = self.eta * h_cells[valid]
+            cell_speed = closing_speed[valid]
+            if closing_acc > eps:
+                dt_cells = (
+                    -cell_speed
+                    + np.sqrt(
+                        cell_speed**2 + 2.0 * closing_acc * allowed_displacement
+                    )
+                ) / closing_acc
+            else:
+                dt_cells = allowed_displacement / cell_speed
+            dt_collision = float(np.min(dt_cells))
+        elif np.any(h_cells <= 0.0):
+            dt_collision = self.dt_min
         else:
-            dt_collision = (
-                -v_abs + np.sqrt(v_abs**2 + 2 * a_abs * ds_max)
-            ) / (a_abs + eps)
+            dt_collision = np.inf
 
-        # # 3. 多准则缩放因子计算
-        # # 膜厚准则：膜越薄，时间尺度越短 → dt ∝ h
-        # f_h = h_min / max(self.h_ref, 1e-9)
-        # f_h = np.clip(f_h, 0.05, 5.0)
-
-        # # 挤压速度准则：∂h/∂t 越大，瞬态效应越强 → dt ∝ h/|∂h/∂t|
-        # f_ht = self.h_ref / max(ht_max, 1e-9)
-        # f_ht = np.clip(f_ht, 0.05, 5.0)
-
-        # # 结构加速度准则：惯性力变化快时需加密步长 → dt ∝ 1/|a|
-        # f_acc = 1.0
-        # if structural_acc is not None:
-        #     f_acc = self.acc_ref / max(abs(structural_acc), 1e-9)
-        #     f_acc = np.clip(f_acc, 0.05, 5.0)
-
-        # # 4. 保守策略：取最严格准则
-        # raw_factor = min(f_h, f_ht, f_acc)
-
-        # # 5. 融合两种准则，限制单步变化幅度（防震荡）
-        # raw_dt = min(dt_collision, self.dt * raw_factor)
-        raw_dt = dt_collision
-        raw_dt = np.clip(raw_dt, self.dt * self.max_dec, self.dt * self.max_inc)
+        raw_dt = min(dt_collision, base_dt * self.max_inc)
         raw_dt = np.clip(raw_dt, self.dt_min, self.dt_max)
 
-        # 6. 指数平滑（工业 CFD 标准做法，避免 dt 剧烈跳变导致耦合发散）
-        self.dt = self.alpha * self.prev_dt + (1.0 - self.alpha) * raw_dt
-        self.prev_dt = self.dt
+        # 2. 增大时间步时使用平滑；安全限制要求减小时立即生效。
+        smoothed_dt = self.alpha * base_dt + (1.0 - self.alpha) * raw_dt
+        if raw_dt < base_dt:
+            smoothed_dt = raw_dt
+        self.dt = float(np.clip(smoothed_dt, self.dt_min, self.dt_max))
+        return self.dt
+
+    def reject_step(self, rejected_dt: float) -> float:
+        """记录一次失败尝试，并返回用于同一物理时刻重试的步长。"""
+        self.dt = max(self.dt_min, rejected_dt * self.max_dec)
+        return self.dt
 
     def get_dt(self) -> float:
         return self.dt
