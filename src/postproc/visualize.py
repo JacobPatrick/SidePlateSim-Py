@@ -297,9 +297,25 @@ def plot_film_thickness_distribution(
     plt.close()
 
 
-def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
+def plot_leak_rate(
+    mesh, leak_rate, fig_name, mode="save", *, per_unit_length=True
+):
+    """绘制每条 facet 的积分流量；默认除以边长，便于比较连续边界。
+
+    leak_rate 应为 calc_leakage 默认返回的 m³/s 流量。
+    per_unit_length=False 保留每条边的积分流量显示。
+    """
+    facets = np.asarray(mesh.facets, dtype=int)
+    leak_rate = np.asarray(leak_rate, dtype=float)
+    if leak_rate.shape != (len(facets),):
+        raise ValueError("leak_rate 必须与 mesh.facets 一一对应")
+    if per_unit_length:
+        points = np.asarray(mesh.points)
+        lengths = np.linalg.norm(
+            points[facets[:, 1]] - points[facets[:, 0]], axis=1
+        )
+        leak_rate = leak_rate / lengths
     fig, ax = plt.subplots(figsize=(7, 6))
-    facets = np.array(mesh.facets)
 
     vmin = float(np.min(leak_rate))
     vmax = float(np.max(leak_rate))
@@ -311,7 +327,7 @@ def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
     if vmin == vmax:
         vmax = vmin + 1.0
     norm = colors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = cm.get_cmap("jet")
+    cmap = plt.get_cmap("jet")
 
     for idx, facet_points in enumerate(facets):
         x = [mesh.points[j][0] for j in facet_points]
@@ -323,7 +339,12 @@ def plot_leak_rate(mesh, leak_rate, fig_name, mode="save"):
     sm.set_array([])
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad=0.05)
-    plt.colorbar(sm, cax=cax, label="Leak Rate [m^3/s]")
+    label = (
+        "Leak Rate per Length [m^2/s]"
+        if per_unit_length
+        else "Leak Rate [m^3/s]"
+    )
+    plt.colorbar(sm, cax=cax, label=label)
     if mode == "save":
         fig = ax.get_figure()
         fig.subplots_adjust(right=0.88)

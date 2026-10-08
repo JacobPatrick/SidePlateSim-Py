@@ -21,10 +21,12 @@ class FilmParameterCalculator:
         self.ones = np.ones(len(centroids))
 
         if gear_type == "drive":
+            self.U_grad = np.array([[0.0, -omega], [omega, 0.0]])
             self.U_cells = np.column_stack(
                 (-omega * self.y, omega * (self.x - DRIVE_GEAR_CENTER[0]))
             )
         else:
+            self.U_grad = np.array([[0.0, omega], [-omega, 0.0]])
             self.U_cells = np.column_stack(
                 (omega * self.y, -omega * (self.x - SLAVE_GEAR_CENTER[0]))
             )
@@ -38,9 +40,7 @@ class FilmParameterCalculator:
         sin_pitch = np.sin(pitch)
         sin_roll = np.sin(roll)
         h_cells = (
-            -sin_pitch * self.x
-            + sin_roll * self.y
-            + state.p[2] * self.ones
+            -sin_pitch * self.x + sin_roll * self.y + state.p[2] * self.ones
         )
         h_grad = (-sin_pitch, sin_roll)
 
@@ -57,6 +57,7 @@ class FilmParameterCalculator:
             U_cells=self.U_cells,
             ht_cells=ht_cells,
             bc_lst=self.bc_lst,
+            U_grad=self.U_grad,
         )
 
 

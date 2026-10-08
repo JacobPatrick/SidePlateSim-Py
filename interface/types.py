@@ -49,6 +49,9 @@ class FilmParam:
     U_cells: np.ndarray
     ht_cells: np.ndarray
     bc_lst: list[float]
+    # 可选的仿射速度梯度，U_grad[a, b] = dU_a/dx_b。
+    # 未提供时，边界拖曳流使用所属单元的速度。
+    U_grad: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
