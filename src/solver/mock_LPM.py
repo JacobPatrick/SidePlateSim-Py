@@ -8,6 +8,10 @@ DRIVE_GEAR_CENTER = (0.0305, 0, 0)
 SLAVE_GEAR_CENTER = (-0.0305, 0, 0)
 GEAR_RADIUS = 0.035
 
+LP = 0.0
+MP = 1.9e6
+HP = 4.9e6
+
 
 class MockLPM:
     def __init__(self):
@@ -19,13 +23,13 @@ class MockLPM:
         """
         # return [0.0, ((0.0, -0.01), 0.0)], [0.0, ((0.0, -0.01), 0.0)]
         return [
-            0.0,
-            ((DRIVE_GEAR_CENTER[0] + GEAR_RADIUS, DRIVE_GEAR_CENTER[1]), 1.9e6),
-            ((DRIVE_GEAR_CENTER[0], DRIVE_GEAR_CENTER[1] - GEAR_RADIUS), 4.9e6),
-            ((DRIVE_GEAR_CENTER[0] - GEAR_RADIUS, DRIVE_GEAR_CENTER[1]), 0.0),
+            LP,
+            ((DRIVE_GEAR_CENTER[0] + GEAR_RADIUS, DRIVE_GEAR_CENTER[1]), MP),
+            ((DRIVE_GEAR_CENTER[0], DRIVE_GEAR_CENTER[1] - GEAR_RADIUS), HP),
+            ((DRIVE_GEAR_CENTER[0] - GEAR_RADIUS, DRIVE_GEAR_CENTER[1]), LP),
         ], [
-            0.0,
-            ((SLAVE_GEAR_CENTER[0] + GEAR_RADIUS, SLAVE_GEAR_CENTER[1]), 4.9e6),
-            ((SLAVE_GEAR_CENTER[0], SLAVE_GEAR_CENTER[1] - GEAR_RADIUS), 1.9e6),
-            ((SLAVE_GEAR_CENTER[0] - GEAR_RADIUS, SLAVE_GEAR_CENTER[1]), 0.0),
+            LP,
+            ((SLAVE_GEAR_CENTER[0] + GEAR_RADIUS, SLAVE_GEAR_CENTER[1]), HP),
+            ((SLAVE_GEAR_CENTER[0], SLAVE_GEAR_CENTER[1] - GEAR_RADIUS), MP),
+            ((SLAVE_GEAR_CENTER[0] - GEAR_RADIUS, SLAVE_GEAR_CENTER[1]), LP),
         ]

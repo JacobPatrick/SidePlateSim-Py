@@ -3,7 +3,7 @@ fluid:
   viscosity: 5e-4
 gear:
   inner_radius: 1e-2
-  rotation_speed: 2000.0
+  rotation_speed: 2500.0
 side_plate:
   m: 1.695
   barycenter: (0.0, 0.0, 0.025)
@@ -14,8 +14,8 @@ iteration:
   max_step_size: 5e-7
   min_step_size: 1e-7
   total_time: 2e-1
-  # 若要研究真实启动瞬态，请改为 false。
+  # 若要研究真实启动瞬态，请改为 false
   equilibrate_initial_state: true
   equilibrium_max_evaluations: 50
   log_every_steps: 100
-  log_path: results/log/optimized_run.txt
+  log_path: results/log/20260928_4.txt

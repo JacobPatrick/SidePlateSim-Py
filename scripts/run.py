@@ -26,9 +26,9 @@ from utils.math_tools import euler_to_quaternion
 from utils.simulation_logger import SimulationLogger
 
 
-def smooth_loading(t, load):
-    ratio = np.clip(t / 1e-2, 0, 1)
-    return ratio * load
+# def smooth_loading(t, load):
+#     ratio = np.clip(t / 1e-2, 0, 1)
+#     return ratio * load
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
     )
 
     t = 0.0
-    z, roll, pitch = 2.5e-06, 5e-5, 0.0
+    z, roll, pitch = 2.2e-06, 5e-5, 0.0
     q = euler_to_quaternion(roll, pitch, 0.0)
     state = SidePlateState(
         p=np.array([0.0, 0.0, z]),
@@ -97,7 +97,7 @@ def main():
     slave_mesh = None
     new_state = None
     F_balance = 6.5e3
-    M_balance = 90.0
+    M_balance = 91.0
     non_film_force_torque = ForceTorque(
         F=np.array([0.0, 0.0, -F_balance]),
         M=np.array([M_balance, 0.0, 0.0]),
