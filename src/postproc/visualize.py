@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 from matplotlib import tri as mtri
 from matplotlib import cm, colors
 from datetime import datetime
+from pathlib import Path
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
@@ -298,12 +299,19 @@ def plot_film_thickness_distribution(
 
 
 def plot_leak_rate(
-    mesh, leak_rate, fig_name, mode="save", *, per_unit_length=True
+    mesh,
+    leak_rate,
+    fig_name,
+    mode="save",
+    *,
+    per_unit_length=True,
+    output_dir="results/figures",
 ):
     """绘制每条 facet 的积分流量；默认除以边长，便于比较连续边界。
 
     leak_rate 应为 calc_leakage 默认返回的 m³/s 流量。
     per_unit_length=False 保留每条边的积分流量显示。
+    output_dir 指定保存目录，默认仍为 results/figures。
     """
     facets = np.asarray(mesh.facets, dtype=int)
     leak_rate = np.asarray(leak_rate, dtype=float)
@@ -315,7 +323,7 @@ def plot_leak_rate(
             points[facets[:, 1]] - points[facets[:, 0]], axis=1
         )
         leak_rate = leak_rate / lengths
-    fig, ax = plt.subplots(figsize=(7, 6))
+    fig, ax = plt.subplots(figsize=(6.5, 6))
 
     vmin = float(np.min(leak_rate))
     vmax = float(np.max(leak_rate))
@@ -333,7 +341,7 @@ def plot_leak_rate(
         x = [mesh.points[j][0] for j in facet_points]
         y = [mesh.points[j][1] for j in facet_points]
         color = cmap(norm(leak_rate[idx]))
-        ax.plot(x, y, color=color, linewidth=1)
+        ax.plot(x, y, color=color, linewidth=2)
 
     sm = cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
@@ -346,10 +354,13 @@ def plot_leak_rate(
     )
     plt.colorbar(sm, cax=cax, label=label)
     if mode == "save":
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
         fig = ax.get_figure()
         fig.subplots_adjust(right=0.88)
         plt.savefig(
-            f'results/figures/{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
+            output_dir
+            / f'{fig_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png',
             dpi=300,
             bbox_inches="tight",
             pad_inches=0.02,

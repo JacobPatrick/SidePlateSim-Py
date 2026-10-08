@@ -302,23 +302,17 @@ class ReynoldsSolver:
         gradient = np.einsum("nij,nj->ni", self._gradient_weights, differences)
         return gradient[:, 0], gradient[:, 1]
 
-    def _calc_pressure_grediant(self, p, film_param: FilmParam):
-        """保留旧拼写；边界梯度计算现在必须提供油膜边界条件。"""
-        return self._calc_pressure_gradient(p, film_param)
-
     def calc_leakage(
         self,
         p,
         film_param: FilmParam,
         *,
-        include_couette=True,
         per_unit_length=False,
     ):
         """返回与 mesh.facets 一一对应的边界流量列表，流入油膜为正。
 
-        默认包含压力驱动与 Couette 拖曳流，单位 m³/s。
-        include_couette=False 仅计算泊肃叶压差流；per_unit_length=True
-        返回单位边长流量 (m²/s)，用于比较沿边界的流量分布。
+        包含压力驱动与 Couette 拖曳流，单位 m³/s。
+        per_unit_length=True 返回单位边长流量 (m²/s)，用于比较沿边界的流量分布。
         marker=0 的外边界沿用压力组装的默认压力，内部 facet 返回零。
 
         压差通量直接复用压力方程的传导系数，不重构全场梯度。
@@ -333,35 +327,34 @@ class ReynoldsSolver:
             self._boundary_pressures(film_param) - p[owners]
         )
 
-        if include_couette:
-            # 膜厚为线性场；速度梯度可描述刚体旋转等仿射速度场。
-            h_face = h_cells[owners] + self.boundary_offsets @ film_param.h_grad
-            velocity = film_param.U_cells[owners]
-            edge_vectors = (
-                self.points[self.face_nodes[boundary, 1]]
-                - self.points[self.face_nodes[boundary, 0]]
-            )
-            # 开放油膜内，两点 Gauss 精确积分线性膜厚与仿射速度的乘积。
-            h_delta = (edge_vectors @ film_param.h_grad) / np.sqrt(12.0)
-            velocity_delta = np.zeros(len(boundary))
-            if film_param.U_grad is not None:
-                U_grad = np.asarray(film_param.U_grad)
-                velocity = velocity + self.boundary_offsets @ U_grad.T
-                velocity_delta = np.einsum(
-                    "ij,ij->i",
-                    edge_vectors @ U_grad.T,
-                    self.boundary_normals,
-                ) / np.sqrt(12.0)
-            normal_velocity = np.einsum(
-                "ij,ij->i", velocity, self.boundary_normals
-            )
-            normal_flux = 0.5 * (
-                np.maximum(h_face - h_delta, 0.0)
-                * (normal_velocity - velocity_delta)
-                + np.maximum(h_face + h_delta, 0.0)
-                * (normal_velocity + velocity_delta)
-            )
-            flow -= 0.5 * lengths * normal_flux
+        # 膜厚为线性场；速度梯度可描述刚体旋转等仿射速度场。
+        h_face = h_cells[owners] + self.boundary_offsets @ film_param.h_grad
+        velocity = film_param.U_cells[owners]
+        edge_vectors = (
+            self.points[self.face_nodes[boundary, 1]]
+            - self.points[self.face_nodes[boundary, 0]]
+        )
+        # 开放油膜内，两点 Gauss 精确积分线性膜厚与仿射速度的乘积。
+        h_delta = (edge_vectors @ film_param.h_grad) / np.sqrt(12.0)
+        velocity_delta = np.zeros(len(boundary))
+        if film_param.U_grad is not None:
+            U_grad = np.asarray(film_param.U_grad)
+            velocity = velocity + self.boundary_offsets @ U_grad.T
+            velocity_delta = np.einsum(
+                "ij,ij->i",
+                edge_vectors @ U_grad.T,
+                self.boundary_normals,
+            ) / np.sqrt(12.0)
+        normal_velocity = np.einsum(
+            "ij,ij->i", velocity, self.boundary_normals
+        )
+        normal_flux = 0.5 * (
+            np.maximum(h_face - h_delta, 0.0)
+            * (normal_velocity - velocity_delta)
+            + np.maximum(h_face + h_delta, 0.0)
+            * (normal_velocity + velocity_delta)
+        )
+        flow -= 0.5 * lengths * normal_flux
 
         # 接触单元没有开放流道，不允许负膜厚产生反向传导率。
         flow[h_cells[owners] <= 0.0] = 0.0
